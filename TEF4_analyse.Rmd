@@ -1,0 +1,242 @@
+---
+title: "TEF4_data_analysis"
+author: "DVM Bishop"
+date: "27/01/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Source is:  
+https://www.officeforstudents.org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
+
+"Each metric shows the proportion of students with successful outcomes. 
+This is compared to expected performance for that provider to take into account the mix of students and subjects at each provider. 
+If a provider’s actual performance is significantly above its benchmark, this is taken as a measure of high performance." 
+
+Explanation of benchmarking methodology is provided on the 
+Higher Education Statistics Agency (HESA) website:
+https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks
+
+See also, re conversion of flags to Gold, Silver, Bronze
+https://wonkhe.com/blogs/policy-watch-tef-year-4-data-release/
+
+This is another of the many documents purporting to explain TEF metrics, but, as usual, you are just then directed to yet more documents
+https://www.officeforstudents.org.uk/.../tef-year-four-metrics-and-contextual-data.pdf
+
+This recommends 'Annex B of the TEF Year Four procedural guidance' for detailed explanation of TEF data.
+That document is here:
+https://www.officeforstudents.org.uk/publications/teaching-excellence-and-student-outcomes-framework-year-four-procedural-guidance/
+
+Contextual data available here under TEF Year Four Contextual Data heading:
+https://www.officeforstudents.org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
+
+```{r read_explore_data, warning=FALSE,include=FALSE}
+library(tidyverse)
+
+webread <- 0
+if (webread==1){
+#Use these lines to read direct from web - slower
+tef4file <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Metrics/TEF_YearFour_AllMetrics.csv")
+tef4context <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Contextual/TEF_YearFour_AllContext.csv")
+}
+
+#Use these lines to read files saved to working directory - quicker
+if(webread==0){
+tef4file<-read_csv('rawdata//TEF_YearFour_AllMetrics.csv')
+#colnames(tef4file)
+tef4context<-read_csv('rawdata//TEF_YearFour_AllContext.csv')
+}
+```
+
+Look at columns to see what data they contain.
+
+```{r inspectvars, include=FALSE}
+print('METRIC')
+unique(tef4file$METRIC)
+print('SPLIT_ID')
+unique(tef4file$SPLIT_ID)
+print('SPLIT_CATEGORY')
+unique(tef4file$SPLIT_CATEGORY)
+
+```
+
+The critical 'flags' variable is coded as characters. Recode to numbers. Also make other column names less unwieldy.
+
+```{r renamecols, include=FALSE}
+#change unwieldy names
+colnames(tef4file)<-c('uniname','UKPRN','majmode','has.metrics','metric','study.mode','split.id','split.cat','numerator','denom',
+                      'indicator','benchmark','prcnt.b','diff','sd','zscore','flag','absval','reason')
+
+#recode flags
+tef4file$flag<-recode(tef4file$flag, "--" = 1, "-" = 2, "=" = 3, "+" = 4,"++" = 5,  .default = 9)
+w<-which(tef4file$flag==9)
+tef4file$flag[w]<-NA
+```
+
+# Analysis of how number of students affects ratings
+
+The final TEF rankings will depend heavily (though not exclusively) on the 'flags' that denote how far an institution's scores depart from the expected value computed by benchmarking. 
+
+These are computed for several different measures, including selected ratings from NSS, data on course continuation, and LEO data on employment outcomes.
+
+The flag is determined by the joint occurence of an extreme z-score and an absolute percentage difference from the predicted value exceeding a given value. As I understand it, this was done because it was recognised that reliance on z-scores alone would make it easier for large institutions to obtain positive or negative flags, because the larger N would make the estimate more precise. 
+
+The analysis below suggests that this problem has not been overcome.  However, I am making what sense I can of the data files provided, which are not easy to understand.  
+
+
+```{r explore, include=FALSE}
+#Initial plot of zscore vs demoninator : which I assume reflects N students for whom data available.
+#But at this point, we have several entries for each institution.
+plot(log(tef4file$denom),tef4file$zscore,xlab='Log N students (denominator)',ylab='zscore')
+
+#plot(log(tef4file$denom),tef4file$sd) #to see how SD declines with size
+
+
+```
+
+
+```{r explore2, include=FALSE}
+#Who are those with huge numbers?
+  w<-which(tef4file$denom>15000)
+unique(tef4file$uniname[w])
+xcol<-c(2,3,4) #these just make it hard to view file
+temp<-tef4file[w,-xcol]
+#N.B. Open University is v large and has poor score on Continuation, though good on other things.
+```
+
+
+For the next analysis I decided to focus just on those rows specifying Core and FullTime entries: I think this means that each institution is represented just once. 
+
+The following plots/tables look at the occurrence of extreme flags in relation to the size of the institution (as reflected in the denominator - this is plotted on a log scale)
+
+This varies from measure to measure, but, if I have analysed this correctly, then there is a substantial increase in the proportion of flagged institutions among larger institutions for both positive and negative flags.
+
+As well as plotting the data continuously, I have divided the institutions into quartiles by size (again using the denominator value) and computed the proportion of flags of different types for each of these quartiles. This shows the same basic thing: more extreme flags for the larger institutions (quartile 4).
+
+There are also differences in distribution of flags across measures - perhaps reflecting distributional properties of the underlying measures?
+
+The number of extreme flags seems remarkably high in some cases, especially for large institutions.
+
+```{r selectcore, echo=FALSE}
+tefcore <- filter(tef4file,split.id=='Core',denom>0,study.mode=='FullTime')
+#Split into quartiles 1-4 in terms of size (numerator)
+
+#do plots by each metric and work out % in each band by size quartile
+tefcore$metric<-as.factor(tefcore$metric)
+
+mycols<-c('purple','blue','grey','pink','red')
+#levels(tefcore$metric)<-c('Support','Feedback','Continue','Employed','Skilled','LEOhigh','LEOsustain','Teaching')
+for (i in 1:length(levels(tefcore$metric))){
+  temp<-filter(tefcore,metric==levels(tefcore$metric)[i])
+  plot(log(temp$denom),temp$zscore,main=levels(tefcore$metric)[i],col=mycols[temp$flag],ylim=c(-25,25),
+       ylab='zscore',xlab='Log N in denominator')
+  legend("bottomleft",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=TRUE)
+  temp$nquant <- cut(temp$denom, quantile(temp$denom,na.rm=TRUE), include.lowest = TRUE,labels=1:4)
+  mytab<-table(temp$nquant,temp$flag)
+  colnames(mytab)<-c('--','-','=','+','++')
+  rownames(mytab)<-c('Size.quartile1','Size.quartile2','Size.quartile3','Size.quartile4')
+  print('Proportions of the 5 flag values for each size quartile')
+  print(levels(tefcore$metric)[i])
+  print(prop.table(mytab,1))
+}
+
+
+```
+
+# Conclusion and questions
+
+I have put these questions to tefmetrics@officeforstudents.org.uk and will update when I get a reply.
+
+1. Have I analysed this right? Please do let me know if I have misunderstood what the data represent.
+
+2. If these analyses are correct, should we be concerned that the larger institutions are far more likely to obtain extreme scores (flagged up) than smaller institutions on most measures?
+
+3. Also the proportions of extreme flags appear to differ between measures. Is this to be expected? (I thought the definition of flags should avoid this, but could the combination of using z-scores with an absolute value cutoff have different consequences for different measures?)
+
+4. N.B. I just selected cases where split.id=='Core' and study.mode=='FullTime'. I am not entirely confident I understand what is meant by 'Core' - does this just subsume  all other categories?
+
+5. Also, it seems that in some cases the 'denominator' does not match the 'head count' in the AllContext file. Is this just a consequence of missing data? Or does the denominator in some cases span more than one year? Is any adjustment made for missing data, given that it cannot be assumed it is missing at random?
+
+# Further analysis, 28 Jan 2019
+
+
+## Consideration of flags in relation to raw scores (before benchmarking)
+
+I assume the raw scores are the percentage of students who meet the benchmark for a specific indicator.
+Below I have plotted the data to show the relationship between the % meeting the indicator, and the derived z-score (which is used to determine the flags), separating the institutions according to how big they are.
+(The line is just the linear regression for each institution size-quartile).
+
+This analysis just confirms how the size of institution affects the awarding of flags. 
+For large institutions, even a small change in % meeting benchmark has a big impact on flags. 
+A small institution, on the other hand, won't get a flag (either positive or negative) regardless of how extreme their score is.
+Now, it could be argued that this is right because the estimate for a small institution will be unreliable. But it is counterintuitive that, for instance a small institution with close to 100% on 'academic support' does not get a + or ++ flag, whereas a large institution can get ++ for a score of 80%.
+
+
+
+```{r plotraw,echo=FALSE}
+nucols<-c('orange','green','brown','black')
+pchlist <-c(20,4,1,3,8) #attempt to use vaguely meaningful symbols
+for (i in 1:length(levels(tefcore$metric))){
+  temp<-filter(tefcore,metric==levels(tefcore$metric)[i])
+    temp$nquant <- as.numeric(cut(temp$denom, quantile(temp$denom,na.rm=TRUE), include.lowest = TRUE,labels=1:4))
+#  plot(log(temp$denom),temp$indicator,main=levels(tefcore$metric)[i],col=mycols[temp$flag],pch=15,
+ #      ylab='% meeting Indicator',xlab='Log N in denominator')
+ # legend("bottomright",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=TRUE)
+
+  #look at how benchmarking affects flags
+  plot(temp$zscore~temp$indicator,col=nucols[temp$nquant],pch=pchlist[temp$flag],
+       main=paste('Raw x z-score coded by size of HEI\n',main=levels(tefcore$metric)[i]),xlab='Indicator',ylab='z-score')
+# Add a legend
+  legpos<-min(temp$indicator,na.rm=TRUE)
+legend(legpos, 15,title='N Quartile',legend=c('Small','Med','Large','Huge'),
+       col=nucols,pch=15,cex=.8)  
+legend(legpos+10, 15,title="Flag",c("--","-","=","+","++"), pch=pchlist,cex=.8)
+ #Add regression lines separated by Nquartile
+ for (n in 1:4){
+   thisfile<-filter(temp,nquant==n)
+   myl<-lm(thisfile$zscore~thisfile$indicator)
+   abline(a=myl$coefficients[1],b=myl$coefficients[2],col=nucols[n])
+ }
+
+
+  #create table of means by quartile
+  group_summary <- temp %>% 
+    group_by(nquant) %>% 
+   summarise_at( vars(denom, indicator), c(mean, sd), na.rm=TRUE)
+
+ 
+  group_summary<-(data.frame(group_summary))
+  colnames(group_summary)<-c('Quartile','Mean N','Mean indicator','SD N','SD indicator')
+  group_summary<-group_summary[,c(1,2,4,3,5)]
+  print(group_summary)
+  
+
+}
+```
+
+# Implications
+
+1. The difficulty of getting meaningful benchmarking raises big questions about the workability of benchmarking at subject-level, when numbers will be far smaller. 
+
+2. The numbers with extreme flags seem too high, especially for large institutions.
+
+A huge amount of data on a large set of variables is being subjected to intensive and complicated computation (just follow the links to various workbooks and instruction manuals for the TEF statistics to see what I mean) solely in order to end up with a 3-point ranking of institutions as gold, silver or bronze.
+
+This involves mixing a basket of quite disparate measures, none of which rates teaching quality. 
+The analyses presented here raise doubts about the validity of the statistical methods applied to the data to derive the 3-point scale.
+
+The logic of benchmarking can also be questioned, though that raises a different set of issues. Benchmarking in effect assumes that if students from disadvantaged backgrounds do more poorly on a measure such as satisfaction with the course, we should take that into account in rating the institution. An alternative view is that institutions should adapt their courses for the students so that this association disappears.
+
+We are told we need TEF because students want information, but they can get information from Unistats https://unistats.ac.uk/. This has information about the different variables that are input into TEF. For different students, different things matter: some may be more concerned about future earnings than others, for instance. Others may think the evaluations of prior students are more important. Unistat allows them to see how specific courses fare on these variables, as well as providing information on entry requirements. TEF does not.
+
+I will of course update this report if I get further information from OfS relating to these analyses. 
+
+
+
