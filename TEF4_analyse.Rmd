@@ -1,10 +1,10 @@
 ---
 title: "TEF4_data_analysis"
 author: "DVM Bishop"
-date: "27/01/2019"
+date: "9th Feb 2019"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -27,6 +27,8 @@ https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks
 See also, re conversion of flags to Gold, Silver, Bronze
 https://wonkhe.com/blogs/policy-watch-tef-year-4-data-release/
 
+Contextual data available here under TEF Year Four Contextual Data heading: https://www.officeforstudents. org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
+
 This is another of the many documents purporting to explain TEF metrics, but, as usual, you are just then directed to yet more documents
 https://www.officeforstudents.org.uk/.../tef-year-four-metrics-and-contextual-data.pdf
 
@@ -34,13 +36,16 @@ This recommends 'Annex B of the TEF Year Four procedural guidance' for detailed 
 That document is here:
 https://www.officeforstudents.org.uk/publications/teaching-excellence-and-student-outcomes-framework-year-four-procedural-guidance/
 
-Contextual data available here under TEF Year Four Contextual Data heading:
-https://www.officeforstudents.org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
+There is also this which has several documents all in one place:
+https://www.gov.uk/government/collections/teaching-excellence-framework
 
 ```{r read_explore_data, warning=FALSE,include=FALSE}
 library(tidyverse)
 
-webread <- 0
+#Reading in TEF_YearFourAllMetrics 
+#Also reading contextual data: this is analysed in later section (see below)
+
+webread <- 0 #set this to 1 to read direct from web
 if (webread==1){
 #Use these lines to read direct from web - slower
 tef4file <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Metrics/TEF_YearFour_AllMetrics.csv")
@@ -164,6 +169,25 @@ I have put these questions to tefmetrics@officeforstudents.org.uk and will updat
 
 5. Also, it seems that in some cases the 'denominator' does not match the 'head count' in the AllContext file. Is this just a consequence of missing data? Or does the denominator in some cases span more than one year? Is any adjustment made for missing data, given that it cannot be assumed it is missing at random?
 
+# Update: 9th February 2019
+Here is the response from OfS, which is reassuring in suggesting I have interpreted the file correctly.
+
+<i>Having looked at your analysis it seems that you have understood what the data represents and analysed in a way that makes sense of TEF methodology.
+ 
+The issue of smaller student numbers ‘defaulting’ to silver is something we are aware of. Paragraph 94 on page 29 of the report on findings from the first subject pilot (1) mentions some OfS analysis on this. The Government consultation response (2) also has a section on this. On page 40, the government response to question 10 refers to assessability, and potential methods that could be used to deal with this in future runs of the TEF.
+ 
+In response to your other questions, the core split is the overall split for a metric. All other splits are essentially a subset of this.
+ 
+The denominator may not match the contextual data for a number of reasons. There are several exclusion reasons for each metric, meaning students which are included in the contextual data may not be included in the metrics themselves. The exclusion reasons for each metric can be found on page 58 onwards of the TEF Year 4 procedural guidance (3).</i>
+
+The email response linked directly to pdfs. Relevant links to these sources are:
+(1) https://www.officeforstudents.org.uk/publications/teaching-excellence-and-student-outcomes-framework-findings-from-the-first-subject-pilot-2017-18/
+(2) https://www.gov.uk/government/consultations/teaching-excellence-and-student-outcomes-framework-subject-level (This has government response)
+(3) https://www.officeforstudents.org.uk/publications/teaching-excellence-and-student-outcomes-framework-year-four-procedural-guidance/
+
+
+
+
 # Further analysis, 28 Jan 2019
 
 
@@ -236,7 +260,150 @@ The logic of benchmarking can also be questioned, though that raises a different
 
 We are told we need TEF because students want information, but they can get information from Unistats https://unistats.ac.uk/. This has information about the different variables that are input into TEF. For different students, different things matter: some may be more concerned about future earnings than others, for instance. Others may think the evaluations of prior students are more important. Unistat allows them to see how specific courses fare on these variables, as well as providing information on entry requirements. TEF does not.
 
-I will of course update this report if I get further information from OfS relating to these analyses. 
+# Contextual data
+
+Additional analysis started 9th Feb 2019. 
+
+```{r explore.context}
+head(tef4context)
+
+mysize <- filter(tef4context,CONTEXT_ID=='Overall',CONTEXT_CATEGORY=='FTE' )
+hist(mysize$TOTAL_HEADCOUNT)
+#v skewed! try log
+hist(log(mysize$TOTAL_HEADCOUNT))
+
+#Suggests we could omit institutions with fewer than 500 students
+w<- which(mysize$TOTAL_HEADCOUNT > 500)
+includelist <- mysize$PROVIDER_NAME[w] #Most of those < 500 are specialist colleges
+
+mycontext <- filter(tef4context, PROVIDER_NAME %in% includelist)
+
+print(paste('N institutions with at least 500 headcount:  ',length(unique(mycontext$PROVIDER_NAME))))
+
+#select just these institutions from tefcore
+
+tefcore2 <- filter(tefcore,uniname %in% includelist )
 
 
+```
 
+
+The number of students on whom data is available appears quite variable from indicator to indicator.
+To look at this I need to compare the Ns in the mycontext dataframe with the denominators in tefcore2.
+
+I'll create a wide-form data frame,starting with just the overall data from mycontext, and then add denominators from tefcore2 in additional columns.
+
+```{r makewide}
+mywide <- data.frame(filter(mycontext,CONTEXT_ID=='Overall',CONTEXT_CATEGORY=='Headcount' ))
+k<-length(mywide) #N columns
+#add columns for new variables
+mywide$NSS <- 0
+mywide$Continue <- 0
+mywide$Employ<-0
+mywide$Earn<-0
+mywide$NSS.p <- 0
+mywide$Continue.p <- 0
+mywide$Employ.p<-0
+mywide$Earn.p<-0
+
+mycats <- c("TheTeachingOnMyCourse","Continuation","EmploymentOrFurtherStudy","LEOAboveMedianEarningsThresholdOrFurtherStudy")
+
+for (i in 1: nrow(mywide)){
+  temp <- filter(tefcore2,uniname==mywide$PROVIDER_NAME[i])
+  for (j in 1:length(mycats)){
+  w <- which(temp$metric==mycats[j])
+  if(length(w>0)){
+    mywide[i,(k+j)] <- temp$denom[w]
+  }
+  }
+}
+
+for (j in (k+1):(k+4)){
+  mywide[,(j+4)]<-round(100*mywide[,j]/mywide$TOTAL_HEADCOUNT,1)
+  hist(mywide[,(j+4)],main=colnames(mywide)[(j+4)])
+  plot(log(mywide$TOTAL_HEADCOUNT),mywide[,(j+4)],main=colnames(mywide)[(j+4)],ylab="% with data")
+}
+
+
+```
+
+There's something odd about the Continuation data - it seems some institutions have continuation data for more than 100% of the students in their headcount!
+
+I wondered whether I'd misaligned the headcount values, but the distributions for the other metrics seem sensible - with values > 100% rare enough to be occasional data entry errors.
+
+I am comparing across 2 files, so it's worth checking against some specific examples.
+
+```{r checkNcont}
+#Find those where N datapoints on continuations is > 105% relative to headcount
+w<-which(mywide$Continue.p>105)
+mywide$PROVIDER_NAME[w]
+
+#Looks like these are mostly colleges of FE or new universities 
+#Let's now check a few original downloaded files - picking those that are universities
+
+
+mytemp <- filter(mycontext,PROVIDER_NAME=='Leeds Trinity University')
+#confirms total headcount is 2835
+
+mytemp2<-filter(tef4file,uniname=='Leeds Trinity University')
+mytemp3<-filter(mytemp2,metric=='Continuation')
+```
+
+This shows for Leeds Trinity University a denominator of 3100 for full time and 46 for part time students for .
+So the denominator in the TEF4yr metric data is greater than the headcount in the contextual data.
+
+Maybe these are measured at different time points?
+
+# Redoing my original analyses with actual headcount rather than denominator
+
+
+```{r addsize}
+#Need to add the headcount variable for each institution to the tefcore2 file
+tefcore2$headcount <-0  #create column
+
+for (i in 1: nrow(mywide)){
+  w <- which(tefcore2$uniname==mywide$PROVIDER_NAME[i])
+  tefcore2$headcount[w]<- mywide$TOTAL_HEADCOUNT[i]
+  }
+
+```
+
+```{r plottrueN, echo=FALSE}
+#Split into quartiles 1-4 in terms of size (numerator)
+
+#do plots by each metric and work out % in each band by size quartile
+
+mycols<-c('purple','blue','grey','pink','red')
+#levels(tefcore$metric)<-c('Support','Feedback','Continue','Employed','Skilled','LEOhigh','LEOsustain','Teaching')
+for (i in 1:length(levels(tefcore2$metric))){
+  temp<-filter(tefcore2,metric==levels(tefcore$metric)[i])
+  plot(log(temp$headcount),temp$zscore,main=levels(tefcore$metric)[i],col=mycols[temp$flag],ylim=c(-25,25),
+       ylab='zscore',xlab='Log N for headcount')
+  legend("bottomleft",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=TRUE)
+  temp$nquant <- cut(temp$headcount, quantile(temp$headcount,na.rm=TRUE), include.lowest = TRUE,labels=1:4)
+  mytab<-table(temp$nquant,temp$flag)
+  colnames(mytab)<-c('--','-','=','+','++')
+  rownames(mytab)<-c('Headcount.quartile1','Headcount.quartile2','Headcount.quartile3','Headcount.quartile4')
+  print('Proportions of the 5 flag values for each size quartile')
+  print(levels(tefcore$metric)[i])
+  print(prop.table(mytab,1))
+}
+
+
+```
+
+The effect of HEI size looks less striking if you take actual headcount rather than denominator.
+
+This raises the question of the relationship between headcount and denominator
+
+
+```{r true.vs.denom}
+
+
+for (i in 1:length(levels(tefcore2$metric))){
+  temp<-filter(tefcore2,metric==levels(tefcore$metric)[i])
+  plot(temp$headcount,temp$denom,main=levels(tefcore$metric)[i],col=mycols[temp$flag],
+       ylab='denominator',xlab='N for headcount')
+  legend("topleft",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=TRUE)
+}
+```
