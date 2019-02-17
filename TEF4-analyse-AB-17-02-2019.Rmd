@@ -172,7 +172,7 @@ There are also differences in distribution of flags across measures - perhaps re
 
 The number of extreme flags seems remarkably high in some cases, especially for large institutions.
 
-```{r selectcore, echo=FALSE}
+```{r plot-core-metrics, echo=FALSE}
 # Plot the Core according to filters
 tidy_tef %>% 
         filter(split_id =='Core',denominator > 0, modeofstudy =='FullTime', !is.na(flagn)) %>% 
