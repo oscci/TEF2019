@@ -61,7 +61,8 @@ From p.31
 + Core And Split metrics, together form part of the eligibility requirements for a TEFassessment. During assessment, they are first considered during Step 1, the generation of the initial hypothesis.
 + Supplementary metrics do not form part of the eligibility requirements for a TEFassessment, though are always displayed if the provider has them. During assessment, they are first considered during Step 2 alongside the additional evidence (provider submission)."
 
-## As 
+### The metric types
+
 ```{r metrics, include=T,echo=F}
 # Check distinct metrics tidyverse style
 tef4file %>% select(metric) %>% 
@@ -69,10 +70,12 @@ tef4file %>% select(metric) %>%
         kable_styling()
 ```
 
+### Split metric catergories
+
 ```{r split_id, include=T,echo=F}
 # Same thing tidyverse style
-tef4file %>% select(split_category) %>% 
-        distinct() %>% kable(booktabs = T, caption = "TEF Split Metrics") %>% 
+tef4file %>% select(split_category, split_id) %>% 
+        distinct() %>% kable(booktabs = T, caption = "TEF metric type: core or split catergory") %>% 
         kable_styling()
 ```
 
@@ -100,6 +103,8 @@ From p.42-43 [Technical Specifications](https://assets.publishing.service.gov.uk
 + A difference of -2 percentage points and a Z-score below -1.96 will receive a negative flag, labelled ‘-’.    
 + A difference of -3 percentage points and a Z-score below -3.00 will receive a double negative flag, labelled ‘--’."
 
+*Alistair* I've interpreted the flag `=` as not significant.
+
 And p.47 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf) this includes flags:
 
 "Any data point that is not reportable for a core, split or supplementary LEOmetric will be replaced with a symbol to indicate why, as follows:
@@ -113,7 +118,7 @@ And p.47 [Technical Specifications](https://assets.publishing.service.gov.uk/gov
 
 ```{r renamecols, include=FALSE}
 # Bit hacky, but one line recoding using mutate and if_else. NA if anything other
-# than these five flags. There are 8 flags.
+# than these five flags. There are 8 flags in total.
 tef4file %>% 
         mutate(flagn = if_else(flag == "--", "-3% & Z-score < -3.00",
                                     if_else(flag == "-", "-2% & Z-score < -1.96",
@@ -122,7 +127,7 @@ tef4file %>%
                                                             if_else(flag == "++", "+3% & Z-score < +3.00",NA_character_)))))) -> tidy_tef
 ```
 
-# Analysis of how number of students affects ratings across all metrics.
+## Analysis of how number of students affects ratings across all metrics.
 
 The final TEF rankings will depend heavily (though not exclusively) on the 'flags' that denote how far an institution's scores depart from the expected value computed by benchmarking. 
 
@@ -133,7 +138,7 @@ The flag is determined by the joint occurence of an extreme z-score and an absol
 The analysis below suggests that this problem has not been overcome.  However, I am making what sense I can of the data files provided, which are not easy to understand.  
 
 
-```{r explore, include=T}
+```{r explore, echo=FALSE, warning=FALSE}
 #Initial plot of zscore vs demoninator : which I assume reflects N students for whom data available.
 #But at this point, we have several entries for each institution.
 tidy_tef %>% 
@@ -146,7 +151,7 @@ tidy_tef %>%
 
 ### Who are the large providers?
 
-```{r explore2, include=T}
+```{r explore2, echo=FALSE, warning=FALSE}
 # Tidyverse style and make a table
 tidy_tef %>% select(provider_name,denominator) %>% 
         filter(denominator > 15000) %>% 
