@@ -1,0 +1,214 @@
+---
+title: "TEF4 data analysis"
+author: "DVM Bishop edited by A.Bailey"
+date: '`r Sys.Date()`'
+output:
+  html_document: default
+  #pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# For pretty tables
+library(kableExtra)
+library(tidyverse)
+# For cleaning names
+library(janitor)
+```
+
+## Background
+
+Source is:  
+https://www.officeforstudents.org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
+
+"Each metric shows the proportion of students with successful outcomes. 
+This is compared to expected performance for that provider to take into account the mix of students and subjects at each provider. 
+If a provider’s actual performance is significantly above its benchmark, this is taken as a measure of high performance." 
+
+*Alistair*: Here I also refer to the [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
+
+
+```{r read_explore_data, warning=FALSE,include=FALSE,cache=TRUE}
+#Reading in TEF_YearFourAllMetrics 
+#Also reading contextual data: this is analysed in later section (see below)
+
+# Download URLs for data
+tef4Url <- "https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Metrics/TEF_YearFour_AllMetrics.csv"
+contextUrl <- "https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Contextual/TEF_YearFour_AllContext.csv"
+
+# Create data directory if not already present
+if(!dir.exists('rawdata')){dir.create('rawdata')}
+
+# Download data if not already downloaded
+if(!file.exists("rawdata/TEF_YearFour_AllMetrics.csv")){
+        download.file(tef4Url,destfile="rawdata/TEF_YearFour_AllMetrics.csv")}
+if(!file.exists("rawdata/TEF_YearFour_AllContext.csv")){
+        download.file(tef4Url,destfile="rawdata/TEF_YearFour_AllContext.csv")}
+
+# Read files and clean names
+tef4file <- read_csv('rawdata/TEF_YearFour_AllMetrics.csv',
+                   na = c(" ","N/A","")) %>% clean_names()
+tef4context <- read_csv('rawdata/TEF_YearFour_AllContext.csv',
+                      na = c(" ","N/A","")) %>% clean_names()
+```
+
+# What are the metrics used in the TEF?
+
+From p.31 
+
+"The types of metrics used in TEF are:
+
++ Core And Split metrics, together form part of the eligibility requirements for a TEFassessment. During assessment, they are first considered during Step 1, the generation of the initial hypothesis.
++ Supplementary metrics do not form part of the eligibility requirements for a TEFassessment, though are always displayed if the provider has them. During assessment, they are first considered during Step 2 alongside the additional evidence (provider submission)."
+
+## As 
+```{r metrics, include=T,echo=F}
+# Check distinct metrics tidyverse style
+tef4file %>% select(metric) %>% 
+        distinct() %>% kable(booktabs= T,caption = "TEF Metrics") %>% 
+        kable_styling()
+```
+
+```{r split_id, include=T,echo=F}
+# Same thing tidyverse style
+tef4file %>% select(split_category) %>% 
+        distinct() %>% kable(booktabs = T, caption = "TEF Split Metrics") %>% 
+        kable_styling()
+```
+
+## Denominater
+
+Unlcear, but assume reflects N students for whom data available, reflecting the 
+size of each institution.
+
+## Z-score and significance
+
+From p.42  [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
+
+"In TEF metrics the number of standard deviations that the indicator is from the benchmark is given as the Z-score. Differences from a benchmark with a Z-score +/-1.9623 will be considered statistically significant. This is equivalent to a 95% confidence interval (that is, we can have 95% confidence that the difference is not due to chance).5.62 The Z-score does not on its own provide an indication of performance. It only measures whether the difference between an indicator and the benchmark is statistically significant."
+
+## Flags
+
+From p.42-43 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
+
+"Once the core and split metrics are calculated and benchmarked, where the results are materially different from the benchmark and that difference is statistically significant, this will be highlighted. This is referred to as flagging."
+
+"Flags will be applied where the indicator is at least +/-2 percentage points from the benchmark AND the Z-score is at least +/-2 (1.96): 
+
++ A difference of +2 percentage points and a Z-score of at least +1.96 will receive a positive flag, labelled ‘+’. If the benchmark is above 97 per cent the difference of 2 percentage points is not required.  
++ A difference of +3 percentage points and a Z-score of at least +3.00 will receive a double positive flag, labelled ‘++’. If the benchmark is above 97 per cent the difference of 3 percentage points is not required.  
++ A difference of -2 percentage points and a Z-score below -1.96 will receive a negative flag, labelled ‘-’.    
++ A difference of -3 percentage points and a Z-score below -3.00 will receive a double negative flag, labelled ‘--’."
+
+And p.47 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf) this includes flags:
+
+"Any data point that is not reportable for a core, split or supplementary LEOmetric will be replaced with a symbol to indicate why, as follows:
+
++ ‘N’ where there are fewer than 10 students in the population
++ ‘N/A’ where the provider did not report any students in the population, or did not participate in the survey 
++ ‘R’ where the provider participated in the survey but has not met the response rate threshold required
++ ‘SUP’ where the provider does not have sufficient data to form the benchmarks.
++ ‘DP’ where the numerator differs from the denominator by fewer than three students (supplementary LEO metrics only)"
+
+
+```{r renamecols, include=FALSE}
+# Bit hacky, but one line recoding using mutate and if_else. NA if anything other
+# than these five flags. There are 8 flags.
+tef4file %>% 
+        mutate(flagn = if_else(flag == "--", "-3% & Z-score < -3.00",
+                                    if_else(flag == "-", "-2% & Z-score < -1.96",
+                                            if_else(flag == "=", "Not significant",
+                                                    if_else(flag == "+", "+2% & Z-score > -1.96",
+                                                            if_else(flag == "++", "+3% & Z-score < +3.00",NA_character_)))))) -> tidy_tef
+```
+
+# Analysis of how number of students affects ratings across all metrics.
+
+The final TEF rankings will depend heavily (though not exclusively) on the 'flags' that denote how far an institution's scores depart from the expected value computed by benchmarking. 
+
+These are computed for several different measures, including selected ratings from NSS, data on course continuation, and LEO data on employment outcomes.
+
+The flag is determined by the joint occurence of an extreme z-score and an absolute percentage difference from the predicted value exceeding a given value. As I understand it, this was done because it was recognised that reliance on z-scores alone would make it easier for large institutions to obtain positive or negative flags, because the larger N would make the estimate more precise. 
+
+The analysis below suggests that this problem has not been overcome.  However, I am making what sense I can of the data files provided, which are not easy to understand.  
+
+
+```{r explore, include=T}
+#Initial plot of zscore vs demoninator : which I assume reflects N students for whom data available.
+#But at this point, we have several entries for each institution.
+tidy_tef %>% 
+        ggplot(aes(denominator,zscore,colour = flagn)) +
+        geom_point() + 
+        scale_x_continuous(trans = "log10") +
+        xlab("Log N students") +
+        ylab("z-score")
+```
+
+### Who are the large providers?
+
+```{r explore2, include=T}
+# Tidyverse style and make a table
+tidy_tef %>% select(provider_name,denominator) %>% 
+        filter(denominator > 15000) %>% 
+        distinct(provider_name,.keep_all = T) %>% 
+        kable(caption = "Providers with denominator > 15,000")
+```
+
+
+## Full-time education providers scores for each of the eight core metrics.
+
+For the next analysis I decided to focus just on those rows specifying Core and FullTime entries: I think this means that each institution is represented just once. 
+
+The following plots/tables look at the occurrence of extreme flags in relation to the size of the institution (as reflected in the denominator - this is plotted on a log scale)
+
+This varies from measure to measure, but, if I have analysed this correctly, then there is a substantial increase in the proportion of flagged institutions among larger institutions for both positive and negative flags.
+
+There are also differences in distribution of flags across measures - perhaps reflecting distributional properties of the underlying measures?
+
+The number of extreme flags seems remarkably high in some cases, especially for large institutions.
+
+```{r selectcore, echo=FALSE}
+# Plot the Core according to filters
+tidy_tef %>% 
+        filter(split_id =='Core',denominator > 0, modeofstudy =='FullTime', !is.na(flagn)) %>% 
+        ggplot(aes(denominator,zscore,colour = flagn)) +
+        geom_point() + 
+        scale_x_continuous(trans = "log10") +
+        xlab("Log N students") +
+        ylab("z-score") +
+        facet_wrap(~metric) +
+        theme(text = element_text(size = 8),
+              legend.position="top",
+              legend.title = element_blank()) # Make the text smaller and move legend
+
+# probs <- seq(0, 1, 0.25)
+# p_names <- map_chr(probs, ~paste0(.x*100, "%"))
+# 
+# p_funs <- map(probs, ~partial(quantile, probs = .x, na.rm = TRUE)) %>% 
+#   set_names(nm = p_names)
+# 
+# p_funs
+# 
+# tidy_tef %>% 
+#         filter(split_id =='Core',denominator > 0, 
+#                modeofstudy =='FullTime', !is.na(flagn), metric =="AcademicSupport") %>%
+#         select(denominator,flagn,metric) %>%
+#         summarize_at(vars(denominator), funs(!!!p_funs))
+        
+```
+
+## How metrics determine Gold, Silver or Bronze
+
+From p.57-58 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
+
+"When looking at the relevant delivery mode(s):
+
+Step 1 Review core and split metrics, very high or low absolute values and other factors
+
+Step 2 Review the provider submission and supplementary metrics
+
+Step 3 Review the provider’s performance holistically Panellists and assessors start by considering a provider’s core metrics flags in majority mode.They then review all the metrics including the splits, absolute values and other factors to form an initial hypothesis of a rating Panellists and assessors then review the provider’s submission and supplementary metrics.They test the initial hypothesis to see if there is anything that causes them to take a different view of their initial rating Panellists and assessors then look holistically at their judgements. They consider the combination of evidence in the metrics and the submission against the assessment criteria, to make a ‘best fit’ judgement using the rating descriptors
+
++ A provider with positive flags (either + or ++) in core metrics that have a total value of 2.5 (after accounting for the weighting set out in 7.10) or more and no negative flags (either - or -- ) should be considered initially as Gold. 
++ A provider with negative flags in core metrics that have a total value of 1.5 or more (after accounting for the weighting set out in 7.10) should be considered initially as Bronze, regardless of the number of positive flags. 
++ All other providers, including those with no flags at all, should be considered initially as Silver."
