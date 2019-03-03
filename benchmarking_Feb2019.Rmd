@@ -20,6 +20,8 @@ library(janitor)
 ```
 
 ## Benchmarking and the TEF
+N. B. This gives the background and computations relevant to this blogpost
+http://deevybee.blogspot.com/2019/03/benchmarking-in-tef-something-doesnt.html
 
 I'm a long-term critic of the Teaching Excellence and Student Outcomes Framework (TEF). I've put forward a swathe of arguments against the rationale for TEF in [this lecture](https://www.slideshare.net/deevybishop/southampton-lecture-on-tef), as well as blogging for the Council for Defence of British Universities (CDBU) about problems with its [rationale](http://cdbu.org.uk/tef-an-ill-conceived-solution-to-a-wrongly-posed-problem/) and [statistical methods](http://cdbu.org.uk/the-problem-with-tef-a-look-at-the-technical-failings/). 
 
