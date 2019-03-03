@@ -327,7 +327,7 @@ tef2url<-'https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd
 if(!dir.exists('rawdata')){dir.create('rawdata')}
 # Download data if not already downloaded
 if(!file.exists("rawdata/TEF_y2_AllMetrics.csv")){
-  download.file(tef4Url,destfile="rawdata/TEF_yr_AllMetrics.csv")}
+  download.file(tef2url,destfile="rawdata/TEF_y2_AllMetrics.csv")}
 tef2017file<-read_csv('rawdata//TEF_y2_AllMetrics.csv',na = c(" ","N/A","")) %>% clean_names()
 
 #Argh - has all sorts of missing data codes in here that make everything read as characters
