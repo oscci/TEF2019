@@ -170,7 +170,7 @@ makeSE<- function(outcomes,Ns,mymult){
 # By specifying lambda, can create expression to compute Differences, that also allows deriviation of variance of D
 # All a bit mindboggling, but this script replicates the Draper e.g.
 vDG<-rep(0,nrow(Ns)) #initialise variance estimate for difference score with DG formula
-vabslam<-vnolambda<-vDB<-vDG #make vector for variance estimate with DB modified formula, or no lambda
+vDGsd<-vabslam<-vnolambda<-vDB<-vDG #make vector for variance estimate with DB modified formula, or no lambda
 
 d<-rep(0,nrow(Ns)) #vector for differences: to check that lambda term recreates the differences
 myrowsums<-rowSums(Ns)
@@ -189,12 +189,13 @@ for (k in 1:nrow(Ns)){
       addbit2<-outcomes[k,j] #no lambda
       addbit3<-mymult*sqrt(abs(lambda))*localvar[k,j] #DB; uses mymult*sqrt rather than squared lambda
       addbit4 <-abs(lambda)*localvar[k,j] #Unsquared lambda
-        
+        addbit5 <-addbit1*sqrt(Ns[k,j]) #SD rather than SE
         if(is.na(addbit1)==FALSE){
         d[i] <- d[i]+addbit #this should recreate the previously computed difference values in diff
         
         #the following lines compare different methods for estimating variance of difference scores
         vDG[i]<-vDG[i]+addbit1 #original Draper Gittoes method 
+        vDGsd[i]<-vDGsd[i]+addbit5
         vnolambda[i] <- vnolambda[i]+addbit2 #exclude lambda
         vDB[i] <- vDB[i]+addbit3 #use squareroot rather than squared lambda
         vabslam[i]<-vabslam[i]+addbit4 #use absolute value of lambda
@@ -204,11 +205,13 @@ for (k in 1:nrow(Ns)){
 }
 #zscore obtained by dividing difference scores by the SE, which is squareroot of variance
 zDG<-d/sqrt(vDG) #zscores computed using DraperGittoes method for SE
+zDGsd<-d/sqrt(vDGsd)
 znolambda<-d/sqrt(vnolambda)
 zDB<-d/sqrt(vDB)
 zabslam<-d/sqrt(vabslam)
-allz<-data.frame(cbind(allbench,zDG,zDB,zabslam))
-colnames(allz) <- c('N','observed','benchmark','diff','z.DG','z.DB','z.abslambda')
+zDGsd1<-d/(sqrt(myrowsums)* sqrt(vDG))
+allz<-data.frame(cbind(allbench,zDG,zDB,zDGsd1))
+colnames(allz) <- c('N','observed','benchmark','diff','z.DG','z.DB','z.DGsd1')
 return(allz)
 }
 ```
@@ -248,10 +251,10 @@ Furthermore, extreme z-scores are much more common in big than in small institut
 # User can specify mean and SD for the benchmark
 for (mysd in c(.2)){ #can look at impact of varying SD by specifying a list of values here
 for(mymean in c(.6)){#mean benchmark level
-  rerun<-0 #set to 1 to simulate data (simulation takes a few minutes)
+  rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
 #if you have already run this, data are saved as RDS and can just be reloaded (see below) if you set rerun to zero
 mymult<-.5 #multiplier for the lambda term in DB version - to be explained later
-nuni<-1000
+nuni<-100
 ncontext<-4 #N contextual factors combinations (as in 'small world' simulation)
 
 
@@ -361,7 +364,7 @@ for (i in 1:length(metriclist)){
 bigz<-100*length(w)/nrow(temp)
 mytext<-paste0('% with absolute z-score > 3 = \n',round(bigz,1),'%')
 
-hist(temp$zscore, breaks=40,main=metriclist[i],xlab='zscore')
+hist(temp$zscore, breaks=40,main=metriclist[i],xlab='zscore',col='red')
 textxplace <-min(temp$zscore,na.rm=TRUE)+5
 text(textxplace,15,mytext,cex=.8)
 }
@@ -389,7 +392,7 @@ It is important to bear in mind that when working with simulated data, the preci
 
 ```{r plotDGvsDB, echo=FALSE}
 
-plot(simz[,5],simz[,6],xlab='Draper-Gittoes (lambda squared)',ylab='sqrt lambda method',main='Z-scores obtained from same data using two methods')
+plot(simz[,5],simz[,6],xlab='Draper-Gittoes (lambda squared)',ylab='sqrt lambda method',main='Z-scores obtained from same data using two methods',pch='+')
 abline(v=-2,lty=2)
 abline(v=2,lty=2)
 ```
