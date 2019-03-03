@@ -46,14 +46,13 @@ library(tidyverse)
 #Also reading contextual data: this is analysed in later section (see below)
 
 webread <- 0 #set this to 1 to read direct from web
-if (webread==1){
+if (webread==1 || !file.exists("rawdata//TEF_YearFour_AllMetrics.csv") || !file.exists("rawdata//TEF_YearFour_AllContext.csv")){
 #Use these lines to read direct from web - slower
 tef4file <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Metrics/TEF_YearFour_AllMetrics.csv")
 tef4context <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Contextual/TEF_YearFour_AllContext.csv")
-}
+} else {
 
 #Use these lines to read files saved to working directory - quicker
-if(webread==0){
 tef4file<-read_csv('rawdata//TEF_YearFour_AllMetrics.csv')
 #colnames(tef4file)
 tef4context<-read_csv('rawdata//TEF_YearFour_AllContext.csv')
