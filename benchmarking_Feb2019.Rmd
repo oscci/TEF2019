@@ -1,11 +1,13 @@
 
 ---
-title: "Benchmarking in the TEF: have they got the sums wrong?"
+title: 'Benchmarking in the TEF: have they got the sums wrong?'
 author: "Dorothy Bishop, with thanks to Alistair Bailey for help with code improvement"
 date: "2nd March 2019"
+always_allow_html: yes
 output:
   html_document: default
   pdf_document: default
+  word_document: default
 ---
   
 ```{r setup, include=FALSE}
@@ -60,7 +62,7 @@ smallworldN %>% kable(booktabs = T, caption = "Small World Example, N") %>%
   kable_styling()
 
 ```
-Essentially, the benchmark for an institution is an average of indicator values weighted by the numbers with each combination of contextual factors in the institution. While cumbersome, it is not difficult to compute. The difference between obtained values and benchmarked value can then be computed, to see if the institution is scoring above expectation (positive difference) or below expectation (negative difference). This function computes the benchmarks for the toy example from Draper.
+Essentially, the obtained score for an institution is an average of indicator values for each combination of contextual factors, weighted by the numbers with each combination of contextual factors in the institution. The benchmarked score is computed by taking the average score for each combination across all institutions and then for each institution creating a mean score, weighted by the number in each category for a that institution. Though cumbersome (and hard to explain in words!) it is not difficult to compute. The difference between obtained values and benchmarked value can then be computed, to see if the institution is scoring above expectation (positive difference) or below expectation (negative difference). This function computes the benchmarks for the toy example from Draper.
 
 ```{r benchmark_function, include=TRUE}
 #################################################################################
@@ -232,6 +234,8 @@ From p.42  [Technical Specifications](https://assets.publishing.service.gov.uk/g
 
 The HESA documents note that it is very easy with this method to get huge absolute values for z-scores, and they deal with this by only flagging up high values if they also meet a second criterion:  the absolute size of difference had to be at least 2% for a single flag, or 3% for a double flag. This is an arbitrary criterion, designed to avoid the fact that trivial differences would otherwise show up as meaningful.
 
+## Z-scores from simulated data
+
 I wanted to check whether these strikingly high z-scores were correctly computed. One way to do that is to simulate some data where there are no true quality differences between institutions - in other words, one can just simulate a set of random numbers - both for the metrics and for sample sizes. If the z-scores from the Draper-Gittoes formula are correct, then z-scores obtained with this approach should range from around -3 to +3.  But they don't, as the histogram below shows. 
 
 These data were simulated using the *rnorm* function in R, with mean value for the indicator of .6 and SD of .2. I have tried varying these values, and have also modified the simulation to make the sample sizes more realistic (as in reality they are strongly skewed, with a few enormous institutions). Overall, regardless of the setting of the simulation, you see z-scores that are considerably larger, in both positive and negative directions, than you would expect if the SEs were correct.
@@ -282,10 +286,10 @@ if (rerun==1){
 saveRDS(simz, fileRDS) #save the data to RDS format - can just load in on rerun
 
 #Plot the z-scores
-hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score')
+hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score',col='red')
 w<-which(abs(simz[,5])>3) #zscore > 2
 mytext<-paste0('% with absolute z-score > 3 = ',100*length(w)/nuni,'%')
-text(80,100,mytext)
+text(80,100,mytext,cex=.8)
 
 #Second plot shows how z-scores relate to sample size, using logN
 plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
@@ -297,9 +301,9 @@ plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Drap
 
 These plots indicate there is something wrong with the z-score estimates. In particular, it looks like the estimate of the standard error is too small.
 
-This result is at odds with this statement from OfS
+This result is at odds with this statement from the Technical Specificiations document (5.63):
 
-*5.63 As a test of the likelihood that a difference between a provider’s benchmark and its indicator is due to chance alone, a z-score +/- 3.0 means the likelihood of the difference being due to chance alone has reduced substantially and is negligible.*
+*As a test of the likelihood that a difference between a provider’s benchmark and its indicator is due to chance alone, a z-score +/- 3.0 means the likelihood of the difference being due to chance alone has reduced substantially and is negligible.*
 
 Given that applying the Draper-Gittoes formula to completely random data gives absolute z-scores greater than 3 on 76% of occasions, this conclusion can be questioned.
 
@@ -311,7 +315,7 @@ First, as specified in Formula (5) in Figure 1, when correctly computed, lambda 
 
 Second, the high numbers of extreme z-scores obtained with the *makeSE* function are not dissimilar to those obtained with real data. To demonstrate that point, we now go on to load in data from TEF year 2. We use [this dataset](https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv) (from 2017), as it has the awards (Bronze, Silver, Gold) as well as the raw data. The computed z-scores are provided in the raw data file, and are plotted for Core data for each metric below. It is evident that absolute z-scores greater than 3 are common - with the exact number varying from metric to metric, but ranging from 33% to 58%.
 
-```{r read2017,echo=FALSE, warnings=FALSE}
+```{r read2017,echo=FALSE, warnings=FALSE,message=FALSE}
 
 tef2url<-'https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv'
 # Create data directory if not already present
@@ -395,13 +399,13 @@ abline(v=2,lty=2)
 In TEF benchmarking, z-scores are converted into 'flags', ranging from - - or -, to denote performance below expectation, up to + or ++ for performance above expectation, with = used to indicate performance in line with expectation. It is these flags that the TEF panel considers when deciding which award (Gold, Silver or Bronze) to award. 
 
 Draper-Gittoes z-scores are flagged for significance as follows:  
-+ - - z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.  
+a) - - z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.  
  
-+ - z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.  
+b) - z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.  
  
-+ + z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.  
+c) + z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.  
  
-+ ++ z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.  
+d) ++ z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.  
 
 Given the problems with the method outlined above, this method is likely to massively overdiagnose both problems and good performance.
  
@@ -451,15 +455,15 @@ From p.57-58 [Technical Specifications](https://assets.publishing.service.gov.uk
 
 *Step 3 Review the provider’s performance holistically. Panellists and assessors start by considering a provider’s core metrics flags in majority mode.They then review all the metrics including the splits, absolute values and other factors to form an initial hypothesis of a rating Panellists and assessors then review the provider’s submission and supplementary metrics.They test the initial hypothesis to see if there is anything that causes them to take a different view of their initial rating Panellists and assessors then look holistically at their judgements. They consider the combination of evidence in the metrics and the submission against the assessment criteria, to make a ‘best fit’ judgement using the rating descriptors*
 
-+ A provider with positive flags (either + or ++) in core metrics that have a total value of 2.5 (after accounting for the weighting set out in 7.10) or more and no negative flags (either - or -- ) should be considered initially as Gold. 
-+ A provider with negative flags in core metrics that have a total value of 1.5 or more (after accounting for the weighting set out in 7.10) should be considered initially as Bronze, regardless of the number of positive flags. 
-+ All other providers, including those with no flags at all, should be considered initially as Silver.*"
++ *A provider with positive flags (either + or ++) in core metrics that have a total value of 2.5 (after accounting for the weighting set out in 7.10) or more and no negative flags (either - or -- ) should be considered initially as Gold. *
++ *A provider with negative flags in core metrics that have a total value of 1.5 or more (after accounting for the weighting set out in 7.10) should be considered initially as Bronze, regardless of the number of positive flags. *
++ *All other providers, including those with no flags at all, should be considered initially as Silver.*"
 
 In the tables below, I have selected institutions that obtained a Bronze or Gold award, and computed the 'total value' scores for the original flags, as specified for the TEF. Against this, I have added a new flag score that would be obtained if flags were awarded according to the quantile scores given above, again awarding half points to the three NSS metrics. 
 
 Clearly this makes a huge difference to outcomes. Because extreme scores are far less common if quantiles are used, most institutions awarded Bronze or Gold would no longer qualify, because their z-scores are no longer flagged up as significant.
 
-```{r checkaward}
+```{r checkaward, echo=FALSE}
 for (thisaward in c('Bronze','Gold')){
 myaward <- filter(mycore2017,provider_tefaward==thisaward)
 metriclist<-unique(myaward$metric)
