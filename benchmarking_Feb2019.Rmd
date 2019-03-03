@@ -31,13 +31,11 @@ Needless, to say, this is all quite technical, but even if you don't follow the 
 
 Benchmarking is intended to provide a way of comparing institutions on some metric, while taking into account  differences between institutions in characteristics that might be expected to affect their performance, such as the subjects of study, and the social backgrounds of students. I will refer to these as 'contextual factors'.
 
-The method used to do benchmarking comes from [Draper and Gittoes (2004)] (https://rss.onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-985X.2004.apm12.x), and is explained in this [talk by Draper, 2006.](https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks). A more comprehensive statistical treatment and critique can be found [here](https://users.soe.ucsc.edu/~draper/draper-talk-for-siena-meeting-12sep06.pdf).
-
-A worked example of how benchmarks are derived in TEF can be found in Annex B of [this document] (https://www.officeforstudents.org.uk/media/c32f61aa-ceb7-4bbb-9f87-2cfc60f2bf89/tefyearfour_metricstechnicalalgorithmsandrebuildinstructions_revised20181219.pdf). This follows the same method as used in the examples by Draper (2006). Essentially, the benchmark for an institution is an average of indicator values weighted by the numbers with each combination of contextual factors in the institution. While cumbersome, it is not difficult to compute. The difference between obtained values and benchmarked value can then be computed, to see if the institution is scoring above expectation (positive difference) or below expectation (negative difference).
+The method used to do benchmarking comes from [Draper and Gittoes, 2004] (https://rss.onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-985X.2004.apm12.x), and is explained in this [document by the Higher Education Statistics Agency: HESA](https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks). A further statistical treatment and critique can be found in slides from a talk by Draper [here](https://users.soe.ucsc.edu/~draper/draper-talk-for-siena-meeting-12sep06.pdf).
 
 Draper provides a 'small world' example with 5 universities and 2 binary contextual categories, age and gender, to yield four combinations of contextual factors.
 
-```{r smallworldeg}
+```{r smallworldeg, include=FALSE}
 #Draper's toy data
 toynames<-c('RCN','Newport','UWE','Bath','Cambridge')
 
@@ -56,24 +54,21 @@ colnames(smallworldN)<-c('YoungM','YoungF','MatureM','MatureF')
 rownames(smallworldoutcomes) <- toynames
 rownames(smallworldN) <- toynames
 
-smallworldoutcomes  %>% kable(booktabs = T, caption = "Small World Example, % passing") %>% 
+smallworldoutcomes  %>% kable(booktabs = T, caption = "Small World Example from Draper (2006), % Students completing") %>% 
   kable_styling()
 smallworldN %>% kable(booktabs = T, caption = "Small World Example, N") %>% 
   kable_styling()
 
 ```
+Essentially, the benchmark for an institution is an average of indicator values weighted by the numbers with each combination of contextual factors in the institution. While cumbersome, it is not difficult to compute. The difference between obtained values and benchmarked value can then be computed, to see if the institution is scoring above expectation (positive difference) or below expectation (negative difference). This function computes the benchmarks for the toy example from Draper.
 
-
-```{r benchmark_function}
+```{r benchmark_function, include=FALSE}
 #################################################################################
 makebenchmark<- function(outcomes,Ns){
-
-
 phat<-rep(0,nrow(Ns))
 pj<-rep(0,ncol(Ns))
 for (i in 1:nrow(Ns)){
   for (j in 1:ncol(Ns)){
-   
   phat[i]<-phat[i]+(outcomes[i,j]*Ns[i,j])
   pj[j]<-pj[j]+(outcomes[i,j]*Ns[i,j])
   }
@@ -84,13 +79,14 @@ pj<-pj/colSums(Ns) #this is weighted mean for each context category (PCF)
 expvalue<-rep(0,nrow(Ns))
 for (i in 1:nrow(Ns)){
   for (j in 1:ncol(Ns)){
-   
   expvalue[i]<-expvalue[i]+(Ns[i,j]*pj[j])
   }
 }
 expvalue<-expvalue/rowSums(Ns) #this is benchmark value
 diff <- phat-expvalue #percentage points difference from benchmark
-myrowsums<-rowSums(Ns)
+myrowsums<-rowSums(Ns) #total N for institution
+
+#make a little data frame to contain benchmarking results
 allbench<-data.frame(cbind(myrowsums,phat,expvalue,diff))
 colnames(allbench) <- c('N','observed','benchmark','diff')
 return(allbench)
@@ -98,7 +94,7 @@ return(allbench)
 ```
 
 
-```{r smallworldcompute}
+```{r smallworldcompute, include=FALSE}
 
 toybench<-makebenchmark(smallworldoutcomes, smallworldN)
 #last term in function is multiplier for lambda in the DB version
@@ -106,15 +102,17 @@ toybench %>% kable(booktabs = T, caption = "Small World Example, benchmarks") %>
   kable_styling()
 ```
 
+### Additional example (not essential here)
 
-```{r AnnexB.eg}
-# This is set out differently from Draper and Gittoes, with data just on one provider
-# and the whole sector.
+A worked example of how benchmarks are derived in TEF can be found in Annex B of [this document](https://www.officeforstudents.org.uk/media/c32f61aa-ceb7-4bbb-9f87-2cfc60f2bf89/tefyearfour_metricstechnicalalgorithmsandrebuildinstructions_revised20181219.pdf). This is set out differently from the Draper example, with data just on one provider and the whole sector, but the function above can be used with it by just treating this as data from two institutions, with institution 2's values obtained by subtracting Institution 1's data from the total. I did this just to confirm that the TEF method was the same as that used above.
 
+```{r AnnexB.eg, include=FALSE}
 # To use my function with this, I will just treat this as 2 unis
 # This confirms that the benchmark is same as given in the e.g.
 
 # There's also something odd - the z-scores for Uni1 and Uni2 given by the DG formula are identical but opposite in sign - that seems odd given that Uni2 is 20 x as big as Uni1.
+
+#Is there a clue here to what's wrong with the formula?
 
 tefoutcomes <-data.frame(matrix(c(.95,0,.92,.94,0,.98,
                                   .95,.99,.95,.94,.98,.98),ncol=6,byrow=TRUE))
@@ -135,14 +133,24 @@ tefz<-makebenchmark(tefoutcomes, tefN)
 
 ```
 
-The next step is far more complex. A z-score is computed by dividing the difference between observed and expected values on an indicator by a denominator, which is variously referred to as a standard deviation and a standard error in the documents on benchmarking. We shall refer to it as a standard error; it takes into account the sample size at each institution, reflecting the fact that the measurement error associated with a difference score will be greater for small than large samples. 
+One small aside. Although the benchmarking formula is algebraically correct, the logic of benchmarking raises many questions. These are not my current focus, but are covered in previous critiques. One point concerns the criteria for a benchmark. It is noted that the benchmark should be associated with the outcome metric. However, if a benchmark is not equally distributed across institutions, this can create problems. I would argue that a benchmark should be associated with outcomes *within institutions* for it to be regarded as valid. Obviously this may be hard to demonstrate for small institutions, but where there is enough data, then it should be tested. Consider the situation for subject of study: if one set of institutions, A, offers medicine but not accountancy, and another set, B, offers accountancy but not medicine, then higher ratings for medicine than accountancy could just be a consequence of differences between institutions. We would need to find institutions that offer both subjects and show that medicine outperforms accountancy within institution to be confident there is a true subject-related difference to be adjusted for. 
+
+This point, however, pales into insignificance compared to the main issue: computation of standard errors of difference scores.
+
+
+## Computing standard errors of difference scores
+
+The next step is far more complex. A z-score is computed by dividing the difference between observed and expected values on an indicator by a denominator, which is variously referred to as a standard deviation and a standard error in the documents on benchmarking. We shall refer to it as a standard error; it takes into account the sample size at each institution, reflecting the fact that the measurement error associated with a difference score will be greater for small than large samples.
+
+For those who are not trained in statistics, the basic logic here is that the estimate of an institution's performance will be more labile if it is based on a small sample. If the institution takes on only 5 students each year, then estimates of completion rates from year to year will be variable - in a year where one student drops out, then the completion rate is only 80%, but if none drop out it will be 100%. You would not expect it to be constant because of random factors outside the control of the institution will affect student drop-outs. In contrast, for an institution with 1000 students, we will see much less variation from year to year. The standard error provides an estimate of the extent to which we expect the estimate of average drop-out to vary from year to year, taking size of population into account.  
+
+To interpret benchmarked scores we need a way of estimating the standard error of the difference between the observed score on a metric (such as completion rate) and the benchmarked score, reflecting how much we would expect this to vary from one occasion to another. Only then can we judge whether the institution's performance is in line with expectation.  
 
 Draper (2006) walks the reader through a standard method for computing the standard errors, as shown in Figure 1. This is illustrated with data from a 'small world' dataset.
-[!Figure 1: Algebra for computing standard error of difference score, from Draper (2006)](Draper_Gittoes algebra.png)
 
-Note that in formula 7, the lambda term is squared.
+![**Figure 1. Algebra for computing standard error of difference score**](Draper_Gittoes algebra.png)
 
-A function to compute the benchmarks, difference and standard errors is given below, and its use illustrated with the 'small world' dataset, showing that results agree with those of Draper (2006).
+The *makeSE* function below computes the benchmarks, difference and standard errors using the Figure 1 formulae. Its use is illustrated with the 'small world' dataset, showing that results agree with those of Draper (2006). (You can ignore for now the lines of the function that are used to explore alternative methods of computing the variance).
 
 
 ```{r makeSE}
@@ -172,25 +180,28 @@ for (k in 1:nrow(Ns)){
                         (myrowsums[i]*mycolsums[j]),
       (Ns[i,j]/myrowsums[i])*(1-(Ns[i,j]/mycolsums[j])) )
        
-      addbit <-lambda*outcomes[k,j]
+      addbit <-lambda*outcomes[k,j] #this will be used to recreate the difference scores (formula 5)
       addbit1 <-lambda^2*localvar[k,j] #this is the original Draper formula
+      
+      #Additional methods evaluated for exploring results when different versions of lambda used when computing formula 7
       addbit2<-outcomes[k,j] #no lambda
-      addbit3<-mymult*sqrt(abs(lambda))*localvar[k,j] #DB; draper formula with mymult*sqrt rather than squared lambda
-      addbit4 <-abs(lambda)*localvar[k,j]
+      addbit3<-mymult*sqrt(abs(lambda))*localvar[k,j] #DB; uses mymult*sqrt rather than squared lambda
+      addbit4 <-abs(lambda)*localvar[k,j] #Unsquared lambda
         
         if(is.na(addbit1)==FALSE){
         d[i] <- d[i]+addbit #this should recreate the previously computed difference values in diff
-        vDG[i]<-vDG[i]+addbit1 #original Draper Gittoes
-        vnolambda[i] <- vnolambda[i]+addbit2
-        vDB[i] <- vDB[i]+addbit3
-        vabslam[i]<-vabslam[i]+addbit4
-          
-         
+        
+        #the following lines compare different methods for estimating variance of difference scores
+        vDG[i]<-vDG[i]+addbit1 #original Draper Gittoes method 
+        vnolambda[i] <- vnolambda[i]+addbit2 #exclude lambda
+        vDB[i] <- vDB[i]+addbit3 #use squareroot rather than squared lambda
+        vabslam[i]<-vabslam[i]+addbit4 #use absolute value of lambda
       }
     }
   }
 }
-zDG<-d/sqrt(vDG)
+#zscore obtained by dividing difference scores by the SE, which is squareroot of variance
+zDG<-d/sqrt(vDG) #zscores computed using DraperGittoes method for SE
 znolambda<-d/sqrt(vnolambda)
 zDB<-d/sqrt(vDB)
 zabslam<-d/sqrt(vabslam)
@@ -200,10 +211,10 @@ return(allz)
 }
 ```
 
-```{r smallworldSE}
-# apply to Draper's toy data
+```{r smallworldSE, echo=FALSE}
+# apply makeSE to Draper's toy data
 
-mymult<-.5 #multiplier for lambda term in DB version
+mymult<-.5 #multiplier for lambda term in DB version: ignore this for now
 toyz<-makeSE(smallworldoutcomes, smallworldN,mymult)
 #last term in function is multiplier for lambda in the DB version
 toyz[,1:5] %>% kable(booktabs = T, caption = "Small World Example, z-scores") %>% 
@@ -211,20 +222,24 @@ toyz[,1:5] %>% kable(booktabs = T, caption = "Small World Example, z-scores") %>
 ```
 
 
-As noted by Draper (2006) the absolute z-scores given by this method seem remarkably large: around 80% of universities have absolute z-scores larger than 2. In this toy example, we see z-scores with absolute values of 5, 9 and 20. 
+As noted by Draper (2006) the absolute z-scores given by this method seem remarkably large: In this toy example, we see z-scores with absolute values of 5, 9 and 20. 
 
 Yet, they are used in TEF as if they are regular z-scores, i.e.:
 
 From p.42  [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
 
-"In TEF metrics the number of standard deviations that the indicator is from the benchmark is given as the Z-score. Differences from a benchmark with a Z-score +/-1.9623 will be considered statistically significant. This is equivalent to a 95% confidence interval (that is, we can have 95% confidence that the difference is not due to chance)."
+*"In TEF metrics the number of standard deviations that the indicator is from the benchmark is given as the Z-score. Differences from a benchmark with a Z-score +/-1.9623 will be considered statistically significant. This is equivalent to a 95% confidence interval (that is, we can have 95% confidence that the difference is not due to chance)."*
 
-Because, especially with large sample sizes, it is very easy with this method to get extremely large absolute values for z-scores, high values are only flagged if they also meet a second criterion:  the absolute size of difference had to be at least 2%. This is an arbitrary criterion, designed to avoid the fact that trivial differences would otherwise show up as meaningful.
+The HESA documents note that it is very easy with this method to get huge absolute values for z-scores, and they deal with this by only flagging up high values if they also meet a second criterion:  the absolute size of difference had to be at least 2% for a single flag, or 3% for a double flag. This is an arbitrary criterion, designed to avoid the fact that trivial differences would otherwise show up as meaningful.
 
-I wanted to check whether these strikingly high z-scores were correctly computed. One way to do that is to simulate some data where there are no true quality differences between institutions - in other words, one can just simulate a set of random numbers - both for the metrics and for sample sizes. If the z-scores from the Draper-Gittoes formula are correct, then z-scores obtained with this approach should range from around -3 to +3.  But they don't, as the histogram below shows. Furthermore, extreme z-scores are much more common in big than in small institutions.
+I wanted to check whether these strikingly high z-scores were correctly computed. One way to do that is to simulate some data where there are no true quality differences between institutions - in other words, one can just simulate a set of random numbers - both for the metrics and for sample sizes. If the z-scores from the Draper-Gittoes formula are correct, then z-scores obtained with this approach should range from around -3 to +3.  But they don't, as the histogram below shows. 
+
+These data were simulated using the *rnorm* function in R, with mean value for the indicator of .6 and SD of .2. I have tried varying these values, and have also modified the simulation to make the sample sizes more realistic (as in reality they are strongly skewed, with a few enormous institutions). Overall, regardless of the setting of the simulation, you see z-scores that are considerably larger, in both positive and negative directions, than you would expect if the SEs were correct.
+
+Furthermore, extreme z-scores are much more common in big than in small institutions, as shown below. This is also a feature of real TEF data, as I discussed in [this blogpost] (http://cdbu.org.uk/the-problem-with-tef-a-look-at-the-technical-failings) (see point 3).
 
 
-```{r simforbench}
+```{r simforbench, echo=FALSE}
 #simulate many unis on 2 x 2 contextual factors
 # User can specify mean and SD for the benchmark
 for (mysd in c(.2)){ #can look at impact of varying SD by specifying a list of values here
@@ -256,6 +271,7 @@ myNmat<-  round(myNmat,0)
 
 
 fileRDS<-paste0('simulated data/simulated_z_Nuni',nuni,'_ncontext',ncontext,'_mean',mymean,'_sd',mysd,'_mult',mymult,'_logN')  ##filename for saving simz to RDS
+
 if(rerun==0){
 simz<-readRDS(fileRDS)  #if this file exists, just read it in
 }
@@ -268,10 +284,11 @@ saveRDS(simz, fileRDS) #save the data to RDS format - can just load in on rerun
 #Plot the z-scores
 hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score')
 w<-which(abs(simz[,5])>3) #zscore > 2
-w1<-which(abs(simz[,6])>3) #rate for alternative DB index based on sqrt lambda
 mytext<-paste0('% with absolute z-score > 3 = ',100*length(w)/nuni,'%')
 text(80,100,mytext)
-plot(log(simz[,1]),simz[,5],ylab='DGz',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
+
+#Second plot shows how z-scores relate to sample size, using logN
+plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
 
 }
 }
@@ -282,16 +299,19 @@ These plots indicate there is something wrong with the z-score estimates. In par
 
 This result is at odds with this statement from OfS
 
-5.63 **As a test of the likelihood that a difference between a provider’s benchmark and its indicator is due to chance alone, a z-score +/- 3.0 means the likelihood of the difference being due to chance alone has reduced substantially and is negligible. As such, z-score values larger than +/- 3 provide very little additional statistical evidence than a z-score of +/-3.0 and should, for practical purposes, be considered as equivalent to +/-3.**
+*5.63 As a test of the likelihood that a difference between a provider’s benchmark and its indicator is due to chance alone, a z-score +/- 3.0 means the likelihood of the difference being due to chance alone has reduced substantially and is negligible.*
 
 Given that applying the Draper-Gittoes formula to completely random data gives absolute z-scores greater than 3 on 76% of occasions, this conclusion can be questioned.
 
-A great deal hinges on the computation of lambda, which, as is evident from Figure 1, is not simple. However, there are two reasons to have confidence in the computations done here. First, as specified in Formula (5) in Figure 1, when correctly computed, lambda can be used to compute the difference scores (observed minus expected values) for a metric. This is done in the **makeSE** function above, and it gives the correct results for difference scores. Second, the high numbers of extreme z-scores obtained with the **makeSE** function are not dissimilar to those obtained with real data. To demonstrate that point, we now go on to load in data from TEF year 2. We use this dataset (from 2017), as it has the awards (Bronze, Silver, Gold) as well as the raw data. The computed z-scores are provided in the raw data file, and are plotted for Core data for each metric below. It is evident that absolute z-scores greater than 3 are common - with the exact number varying from metric to metric, but ranging from 33% to 58%.
+A great deal hinges on the computation of lambda, which, as is evident from Figure 1, is not simple. I did, of course, wonder whether the *makeSE* function was correct.  
 
+There are two reasons to have confidence that the computations in *makeSE* are doing the benchmarking in the same way as is done in TEF. 
 
+First, as specified in Formula (5) in Figure 1, when correctly computed, lambda can be used to compute the difference scores (observed minus expected values) for a metric. This is done in the *makeSE* function above, and it gives the correct results for difference scores.  
 
+Second, the high numbers of extreme z-scores obtained with the *makeSE* function are not dissimilar to those obtained with real data. To demonstrate that point, we now go on to load in data from TEF year 2. We use [this dataset](https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv) (from 2017), as it has the awards (Bronze, Silver, Gold) as well as the raw data. The computed z-scores are provided in the raw data file, and are plotted for Core data for each metric below. It is evident that absolute z-scores greater than 3 are common - with the exact number varying from metric to metric, but ranging from 33% to 58%.
 
-```{r read2017}
+```{r read2017,echo=FALSE}
 
 tef2url<-'https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv'
 # Create data directory if not already present
@@ -318,14 +338,14 @@ tef2017file$provider_name<-as.factor(tef2017file$provider_name)
 
 ```
 
-```{r recodeflags}
+```{r recodeflags, echo=FALSE}
 #recode flags
 tef2017file$flag<-recode(tef2017file$flag, "--" = 1, "-" = 2, "=" = 3, "+" = 4,"++" = 5,  .default = 9)
 w<-which(tef2017file$flag==9)
 tef2017file$flag[w]<-NA
 ```
 
-```{r checkz}
+```{r checkz,echo=FALSE}
 #To look at z-scores we'll work with a reduced file, so we just select Full Time, Core data
 #This file has one z-score per provider for each of 6 metrics
 
@@ -339,15 +359,17 @@ mytext<-paste0('% with absolute z-score > 3 = \n',round(bigz,1),'%')
 
 hist(temp$zscore, breaks=40,main=metriclist[i],xlab='zscore')
 textxplace <-min(temp$zscore,na.rm=TRUE)+5
-text(textxplace,10,mytext,cex=.8)
+text(textxplace,15,mytext,cex=.8)
 }
 ```
 
-It does seem remarkable that HESA has continued to use this benchmarking method despite the fact it yields such extreme z-scores. The method seems designed to over-identify high and low-achieving institutions. The only step taken to counteract this trend is an ad hoc one: because large institutions are particularly prone to obtain extreme scores, a large absolute z-score is only flagged as 'significant' if the absolute difference score is also greater than 2 percentage points. Nevertheless, the number of flagged institutions for each metric, is still far higher than we would expect if the z-scores were accurate.
+It does seem remarkable that HESA has continued to use this benchmarking method despite the fact it yields such extreme z-scores. The method seems designed to over-identify high and low-achieving institutions. The only step taken to counteract this trend is an ad hoc one: because large institutions are particularly prone to obtain extreme scores, a large absolute z-score is only flagged as 'significant' if the absolute difference score is also greater than 2 or 3 percentage points. Nevertheless, the number of flagged institutions for each metric, is still far higher than we would expect if the z-scores were accurate.
 
-I wondered if there might be an error in the formula used to compute the z-scores. My attempt to investigate this was decidedly exploratory: I noted that formula 7 in Figure 1 involved using a squared value of lambda in a weighted sum. Given that lambda values were usually much smaller than 1, the squared values were minute. I experimented with taking the square root of lambda as a multiplier instead. This gives a distribution of z-scores that looks far more like one would expect. With simulated random data, the range of z-scores depends on the standard deviation specified when simulating the data, but is generally no greater than +/- 4. The plot below shows the z-scores obtained with the same random dataset shown above with the Draper-Gittoes method. Note that as well as giving a more plausible range of z-scores, this method does not show the strikingly greater dispersion of z-scores with sample size that is obtained when the Draper-Gittoes method is used. This latter phenonenom is also a feature of real TEF data, as I discussed in [this blogpost] (http://cdbu.org.uk/the-problem-with-tef-a-look-at-the-technical-failings/) (see point 3).
+## Exploring alternative formulae for SE calculation
 
-```{r sqrtsim}
+I wondered if there might be an error in the formula used to compute the z-scores. My attempt to investigate this was decidedly exploratory: I noted that formula 7 in Figure 1 involved using a squared value of lambda in a weighted sum. Given that lambda values were usually much smaller than 1, the squared values were minute. I experimented with taking the square root of lambda as a multiplier instead. This gives a distribution of z-scores that looks far more like one would expect. With simulated random data, the range of z-scores depends on the standard deviation specified when simulating the data, but is generally no greater than +/- 4. The plot below shows the z-scores obtained with the same random dataset shown above with the Draper-Gittoes method. Note that as well as giving a more plausible range of z-scores, this method does not show the strikingly greater dispersion of z-scores with sample size that is obtained when the Draper-Gittoes method is used. 
+
+```{r sqrtsim, echo=FALSE}
 #Plot the z-scores
 hist(simz[,6],breaks=40,main='Sqrt.lambda method: z-scores from random data',xlab='z-score')
 w1<-which(abs(simz[,6])>3) #rate for alternative DB index based on sqrt lambda
@@ -361,27 +383,35 @@ The relationship between zscores obtained using lambda squared vs squareroot lam
 
 It is important to bear in mind that when working with simulated data, the precise details will depend on factors such as the variance and distribution of scores. I have not explored these aspects in detail. My purpose here is just to note that the distribution of z-scores from the Draper-Gittoes method is very strange, and it is plausible that there could be an algebraic error involved in the use of lambda squared, which leads to very small standard errors. I'm not clear whether the use of a square root lambda weighting makes sense statistically: I just tried this as an empirical alternative, and was interested to see that it seemed to behave in a more orderly manner.
 
-```{r plotDGvsDB}
+```{r plotDGvsDB, echo=FALSE}
 
-plot(simz[,5],simz[,6],xlab='Draper-Gittoes (lambda squared)',ylab='sqrt lambda method')
+plot(simz[,5],simz[,6],xlab='Draper-Gittoes (lambda squared)',ylab='sqrt lambda method',main='Z-scores obtained from same data using two methods')
 abline(v=-2,lty=2)
 abline(v=2,lty=2)
 ```
 
-## Using quantiles rather than z-scores
+## Conversion of z-scores into flags
 
-The Draper-Gittoes z-scores are flagged for significance as follows:
- one point (- or +) for an absolute z-score of 2, AND an absolute difference between observed and expected values of 2%.
- two points (-- or ++) for an absolute z-score of 3, AND an absolute difference between observed and expected values of 3%.
+In TEF benchmarking, z-scores are converted into 'flags', ranging from -- or -, to denote performance below expectation, up to + or ++ for performance above expectation, with = used to indicate performance in line with expectation. It is these flags that the TEF panel considers when deciding which award (Gold, Silver or Bronze) to award. 
+
+Draper-Gittoes z-scores are flagged for significance as follows:
+ -- z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.
+ - z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.
+ + z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.
+ ++ z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.
+
+Given the problems with the method outlined above, this method is likely to massively overdiagnose both problems and good performance.
+ 
+## Using quantiles rather than z-scores
  
 Given that the z-scores obtained with the Draper-Gittoes method are so extreme, it could be argued that flags should be based on quantiles rather than z-score cutoffs, omitting the additional absolute difference criterion. For instance, for the Year 2 TEF data plotted above, we can find cutoffs corresponding to the most extreme 5% or 1%.
 
-```{r makequants}
+```{r makequants, echo=FALSE}
 
 myquants<-c(0.001, .01, .05,.95,.99,1)# cutoffs for most extreme 1% and 5% at top and bottom
 
 quantbreaks<-quantile(mycore2017$zscore,probs = myquants,na.rm=TRUE)
-print('Quantile breaks in zscores: ')
+print('Quantile breaks in zscores for Year 2 z-scores from Core Full Time: ')
 print(quantbreaks)
 
 ```
@@ -390,7 +420,7 @@ Suppose we adopted a quantile method of scoring based on these numbers. Then we 
 
 As a next step, we will add these new flags to the Year 2 data.
 
-```{r makenewflags}
+```{r makenewflags, echo=FALSE}
 mycore2017$newflag <- 3
 mycore2017$newflag[mycore2017$zscore<quantbreaks[3]]<-2
 mycore2017$newflag[mycore2017$zscore<quantbreaks[2]]<-1
@@ -400,19 +430,17 @@ newflagtab<-table(mycore2017$flag,mycore2017$newflag)
 #newflagtab shows relationship between old flags (rows) and newflags (cols))
 
 #If I was wanting to go the whole hog, it might be better to do this separately for each metric.
-#But given that original TEF method was constant across metrics, I'm sticking to this.
+#But given that original TEF method was applied constantly across metrics, I'm sticking to this.
 
 ```
 
-It is interesting to consider how this might affect the allocation of bronze and gold awards. The mapping from raw data to awards is complex and involves more than just a consideration of flags. Furthermore, as well as the core metrics, which we have looked at above, the split metrics are also considered. The following section is taking from the official guidance:
+It is interesting to consider how this might affect the allocation of bronze and gold awards. The mapping from raw data to awards is complex and involves more than just a consideration of flags. Furthermore, as well as the core metrics, which we have looked at above, the split metrics are also considered - i.e. flags are also awarded for subcategories, such as male/female, disabled/non-disabled: in all there are around 130 flags awarded across the six metrics for each institution. But not all flags are treated equally: the three metrics based on the National Student Survey are given half the weight of other metrics. The following section is taking from the official guidance:
 
 ## How metrics determine Gold, Silver or Bronze
 
-In section 7.10 it is explained that the three metrics from NSS are given a weight of 0.5, and the other metrics are given a weight of 1.0.
+From p.57-58 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf) (N.B. where reference is made to 7.10, this refers to the fact that flags are awarded half a point for NSS metrics and a full point for other metrics).
 
-From p.57-58 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
-
-"When looking at the relevant delivery mode(s):
+*"When looking at the relevant delivery mode(s):
 
 Step 1 Review core and split metrics, very high or low absolute values and other factors
 
@@ -422,9 +450,11 @@ Step 3 Review the provider’s performance holistically. Panellists and assessor
 
 + A provider with positive flags (either + or ++) in core metrics that have a total value of 2.5 (after accounting for the weighting set out in 7.10) or more and no negative flags (either - or -- ) should be considered initially as Gold. 
 + A provider with negative flags in core metrics that have a total value of 1.5 or more (after accounting for the weighting set out in 7.10) should be considered initially as Bronze, regardless of the number of positive flags. 
-+ All other providers, including those with no flags at all, should be considered initially as Silver."
++ All other providers, including those with no flags at all, should be considered initially as Silver."*
 
+In the tables below, I have selected institutions that obtained a Bronze or Gold award, and computed the 'total value' scores for the original flags, as specified for the TEF. Against this, I have added a new flag score that would be obtained if flags were awarded according to the quantile scores given above, again awarding half points to the three NSS metrics. 
 
+Clearly this makes a huge difference to outcomes. Because extreme scores are far less common if quantiles are used, most institutions awarded Bronze or Gold would no longer qualify, because their z-scores are no longer flagged up as significant.
 
 ```{r checkaward}
 for (thisaward in c('Bronze','Gold')){
@@ -467,4 +497,8 @@ print('Gold awards, 2017')
 print(metrictable[order(metrictable$oldflagscore),c(1,20,21)])
 ```
 
+It is noteworthy that there was a great deal of publicity around the award of Bronze to certain high-profile institutions, in particularly the London School of Economics, Southampton University, University of Liverpool and the School of Oriental and African Studies. On the basis of quantile scores for Core metrics, none of these would meet criteria for Bronze: their flag scores would be -1, 0, -.5 and 0 respectively. But these are not the only institutions to see a change in award when quantiles are used. The majority of smaller institutions awarded Bronze obtain flag scores of zero.
 
+The same is true of Gold Awards. Most institutions that were deemed to significantly outperform their benchmarks no longer do so if quantiles are used.
+
+Should we therefore change the criteria used in benchmarking and adopt quantile scores? Because I think there are other conceptual problems with benchmarking, and indeed with TEF in general, I would not make that recommendation. I would prefer to see TEF abandoned. I hope the current analysis can at least draw people's attention to the questionable use of statistics used in deriving z-scores and their corresponding flags. The difference between a Bronze, Silver and Gold can potentially have a large impact on an institution's reputation. The current system for allocating these awards is not, to my mind, defensible. I will, of course, be receptive to attempts to defend it or to show errors in my analysis. 
