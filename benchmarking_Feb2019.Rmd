@@ -25,13 +25,13 @@ This week, the Royal Statistical Society wrote a [scathing report](https://www.r
 
 This reflects concerns I have had, which have led me to do further analyses of the publicly available TEF datasets. The conclusion I have come to is that benchmarking is not just conceptually flawed, but is based on a formula which contains an algebraic error that leads to unusually large z-scores. There is some guesswork involved in my analysis, because - as I pointed out in my second CDBU blogpost - there is no script available to show the workings of the benchmarking computations. Furthermore, my understanding of the mathematical aspects of benchmarking is limited. But the bottom line is that there is a key formula that incorporates a computed weight, lambda. TEF benchmarking follows the method of Draper and Gittoes (2004), in which standard errors for difference scores incorporate a squared lambda term. This yields a weird distribution of z-scores, which was noted by Draper and Gittoes. If you substitute the the square root of lambda, the z-scores behave much more in line with expectation. 
 
-Needless, to say, this is all quite technical, but even if you don't follow the maths, I suggest you just consider the analyses reported below, in which I compare the benchmarking output from the Draper and Gittoes method (henceforth DG) with that from my alternative method (henceforth DB).
+Needless, to say, this is all quite technical, but even if you don't follow the maths, I suggest you just consider the analyses reported below, in which I compare the benchmarking output from the Draper and Gittoes method with that from an alternative approach.
 
 ## Draper & Gittoes: a toy example
 
 Benchmarking is intended to provide a way of comparing institutions on some metric, while taking into account  differences between institutions in characteristics that might be expected to affect their performance, such as the subjects of study, and the social backgrounds of students. I will refer to these as 'contextual factors'.
 
-The method used to do benchmarking comes from [Draper and Gittoes, 2004] (https://rss.onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-985X.2004.apm12.x), and is explained in this [document by the Higher Education Statistics Agency: HESA](https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks). A further statistical treatment and critique can be found in slides from a talk by Draper [here](https://users.soe.ucsc.edu/~draper/draper-talk-for-siena-meeting-12sep06.pdf).
+The method used to do benchmarking comes from [Draper and Gittoes, 2004](https://rss.onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-985X.2004.apm12.x), and is explained in this [document by the Higher Education Statistics Agency: HESA](https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks). A further statistical treatment and critique can be found in slides from a talk by Draper [here](https://users.soe.ucsc.edu/~draper/draper-talk-for-siena-meeting-12sep06.pdf).
 
 Draper provides a 'small world' example with 5 universities and 2 binary contextual categories, age and gender, to yield four combinations of contextual factors.
 
@@ -62,7 +62,7 @@ smallworldN %>% kable(booktabs = T, caption = "Small World Example, N") %>%
 ```
 Essentially, the benchmark for an institution is an average of indicator values weighted by the numbers with each combination of contextual factors in the institution. While cumbersome, it is not difficult to compute. The difference between obtained values and benchmarked value can then be computed, to see if the institution is scoring above expectation (positive difference) or below expectation (negative difference). This function computes the benchmarks for the toy example from Draper.
 
-```{r benchmark_function, include=FALSE}
+```{r benchmark_function, include=TRUE}
 #################################################################################
 makebenchmark<- function(outcomes,Ns){
 phat<-rep(0,nrow(Ns))
@@ -311,7 +311,7 @@ First, as specified in Formula (5) in Figure 1, when correctly computed, lambda 
 
 Second, the high numbers of extreme z-scores obtained with the *makeSE* function are not dissimilar to those obtained with real data. To demonstrate that point, we now go on to load in data from TEF year 2. We use [this dataset](https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv) (from 2017), as it has the awards (Bronze, Silver, Gold) as well as the raw data. The computed z-scores are provided in the raw data file, and are plotted for Core data for each metric below. It is evident that absolute z-scores greater than 3 are common - with the exact number varying from metric to metric, but ranging from 33% to 58%.
 
-```{r read2017,echo=FALSE}
+```{r read2017,echo=FALSE, warnings=FALSE}
 
 tef2url<-'https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv'
 # Create data directory if not already present
@@ -381,7 +381,7 @@ plot(log(simz[,1]),simz[,6],ylab='z-score',xlab='logN',main='Sqrt.lambda method 
 
 The relationship between zscores obtained using lambda squared vs squareroot lambda is shown in the next Figure. This uses the simulated random data described above. One can see that, by flagging institutions with Draper-Gittoes absolute z-scores greater than 2, a very large proportion of institutions would be identified as 'significant', when in fact the alternative method of computing z-scores suggests their difference scores are well within normal limits.
 
-It is important to bear in mind that when working with simulated data, the precise details will depend on factors such as the variance and distribution of scores. I have not explored these aspects in detail. My purpose here is just to note that the distribution of z-scores from the Draper-Gittoes method is very strange, and it is plausible that there could be an algebraic error involved in the use of lambda squared, which leads to very small standard errors. I'm not clear whether the use of a square root lambda weighting makes sense statistically: I just tried this as an empirical alternative, and was interested to see that it seemed to behave in a more orderly manner.
+It is important to bear in mind that when working with simulated data, the precise details will depend on factors such as the variance and distribution of scores. I have not explored these aspects in detail. My purpose here is just to note that the distribution of z-scores from the Draper-Gittoes method is very strange, and it is plausible that there could be an algebraic error involved in the use of lambda squared, which leads to very small standard errors. I'm not clear whether the use of a square root lambda weighting makes sense statistically: I just tried this as an empirical alternative, and was interested to see that it seemed to behave in a more orderly manner. Nevertheless, I have found that where the SD of the simulated metric is small, use of square root lambda gives too restricted a range of z-scores, with no extreme values at all. I cannot therefore recommend this as an alternative: I can only note that the current Draper-Gittoes method is problematic.
 
 ```{r plotDGvsDB, echo=FALSE}
 
@@ -392,13 +392,16 @@ abline(v=2,lty=2)
 
 ## Conversion of z-scores into flags
 
-In TEF benchmarking, z-scores are converted into 'flags', ranging from -- or -, to denote performance below expectation, up to + or ++ for performance above expectation, with = used to indicate performance in line with expectation. It is these flags that the TEF panel considers when deciding which award (Gold, Silver or Bronze) to award. 
+In TEF benchmarking, z-scores are converted into 'flags', ranging from - - or -, to denote performance below expectation, up to + or ++ for performance above expectation, with = used to indicate performance in line with expectation. It is these flags that the TEF panel considers when deciding which award (Gold, Silver or Bronze) to award. 
 
-Draper-Gittoes z-scores are flagged for significance as follows:
- -- z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.
- - z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.
- + z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.
- ++ z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.
+Draper-Gittoes z-scores are flagged for significance as follows:  
++ - - z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.  
+ 
++ - z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.  
+ 
++ + z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.  
+ 
++ ++ z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.  
 
 Given the problems with the method outlined above, this method is likely to massively overdiagnose both problems and good performance.
  
@@ -416,7 +419,7 @@ print(quantbreaks)
 
 ```
 
-Suppose we adopted a quantile method of scoring based on these numbers. Then we would award extreme flags (-- or ++) only to those with negative z-scores of -13.7 or less, or positive score of 14.6 or more; less extreme flags would be awarded to those with negative z-score of -7 or less (- flag), or positive z-score of 8.6 or more (+).
+Suppose we adopted a quantile method of scoring based on these numbers. Then we would award extreme flags (- - or ++) only to those with negative z-scores of -13.7 or less, or positive score of 14.6 or more; less extreme flags would be awarded to those with negative z-score of -7 or less (- flag), or positive z-score of 8.6 or more (+).
 
 As a next step, we will add these new flags to the Year 2 data.
 
@@ -440,17 +443,17 @@ It is interesting to consider how this might affect the allocation of bronze and
 
 From p.57-58 [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf) (N.B. where reference is made to 7.10, this refers to the fact that flags are awarded half a point for NSS metrics and a full point for other metrics).
 
-*"When looking at the relevant delivery mode(s):
+"*When looking at the relevant delivery mode(s)*:
 
-Step 1 Review core and split metrics, very high or low absolute values and other factors
+*Step 1 Review core and split metrics, very high or low absolute values and other factors*
 
-Step 2 Review the provider submission and supplementary metrics
+*Step 2 Review the provider submission and supplementary metrics*
 
-Step 3 Review the provider’s performance holistically. Panellists and assessors start by considering a provider’s core metrics flags in majority mode.They then review all the metrics including the splits, absolute values and other factors to form an initial hypothesis of a rating Panellists and assessors then review the provider’s submission and supplementary metrics.They test the initial hypothesis to see if there is anything that causes them to take a different view of their initial rating Panellists and assessors then look holistically at their judgements. They consider the combination of evidence in the metrics and the submission against the assessment criteria, to make a ‘best fit’ judgement using the rating descriptors
+*Step 3 Review the provider’s performance holistically. Panellists and assessors start by considering a provider’s core metrics flags in majority mode.They then review all the metrics including the splits, absolute values and other factors to form an initial hypothesis of a rating Panellists and assessors then review the provider’s submission and supplementary metrics.They test the initial hypothesis to see if there is anything that causes them to take a different view of their initial rating Panellists and assessors then look holistically at their judgements. They consider the combination of evidence in the metrics and the submission against the assessment criteria, to make a ‘best fit’ judgement using the rating descriptors*
 
 + A provider with positive flags (either + or ++) in core metrics that have a total value of 2.5 (after accounting for the weighting set out in 7.10) or more and no negative flags (either - or -- ) should be considered initially as Gold. 
 + A provider with negative flags in core metrics that have a total value of 1.5 or more (after accounting for the weighting set out in 7.10) should be considered initially as Bronze, regardless of the number of positive flags. 
-+ All other providers, including those with no flags at all, should be considered initially as Silver."*
++ All other providers, including those with no flags at all, should be considered initially as Silver.*"
 
 In the tables below, I have selected institutions that obtained a Bronze or Gold award, and computed the 'total value' scores for the original flags, as specified for the TEF. Against this, I have added a new flag score that would be obtained if flags were awarded according to the quantile scores given above, again awarding half points to the three NSS metrics. 
 
