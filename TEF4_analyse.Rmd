@@ -1,7 +1,7 @@
 ---
-title: "TEF4_data_analysis"
+title: "TEF2018_data_analysis"
 author: "DVM Bishop"
-date: "9th Feb 2019"
+date: "20th Feb 2019"
 output:
   pdf_document: default
   html_document: default
@@ -27,7 +27,7 @@ https://www.hesa.ac.uk/data-and-analysis/performance-indicators/benchmarks
 See also, re conversion of flags to Gold, Silver, Bronze
 https://wonkhe.com/blogs/policy-watch-tef-year-4-data-release/
 
-Contextual data available here under TEF Year Four Contextual Data heading: https://www.officeforstudents. org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
+Contextual data available here under TEF Year Four Contextual Data heading: https://www.officeforstudents.org.uk/advice-and-guidance/teaching/tef-data/get-the-data/
 
 This is another of the many documents purporting to explain TEF metrics, but, as usual, you are just then directed to yet more documents
 https://www.officeforstudents.org.uk/.../tef-year-four-metrics-and-contextual-data.pdf
@@ -39,8 +39,21 @@ https://www.officeforstudents.org.uk/publications/teaching-excellence-and-studen
 There is also this which has several documents all in one place:
 https://www.gov.uk/government/collections/teaching-excellence-framework
 
+For previous rankings see https://www.timeshighereducation.com/news/teaching-excellence-framework-tef-results-2017
+
+# HESA on continuation rates
+https://www.hesa.ac.uk/data-and-analysis/performance-indicators/non-continuation/technical
+https://www.hesa.ac.uk/data-and-analysis/performance-indicators/definitions
+
+# TEF outcomes
+https://www.officeforstudents.org.uk/advice-and-guidance/teaching/tef-outcomes/#/
+NB can be 2017 or 2018
+
 ```{r read_explore_data, warning=FALSE,include=FALSE}
 library(tidyverse)
+require(DescTools) #for reordering factor levels
+require(coin) #for linear by linear chi square
+require(rcompanion)
 
 #Reading in TEF_YearFourAllMetrics 
 #Also reading contextual data: this is analysed in later section (see below)
@@ -49,14 +62,24 @@ webread <- 0 #set this to 1 to read direct from web
 if (webread==1){
 #Use these lines to read direct from web - slower
 tef4file <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Metrics/TEF_YearFour_AllMetrics.csv")
+tef4afile<-read.csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Metrics/TEF_YearFour_AllMetrics.csv")
 tef4context <- read_csv("https://ofslivefs.blob.core.windows.net/files/TEF%20data%20updated/Contextual/TEF_YearFour_AllContext.csv")
 }
 
 #Use these lines to read files saved to working directory - quicker
 if(webread==0){
-tef4file<-read_csv('rawdata//TEF_YearFour_AllMetrics.csv')
+tef4file<-read.csv('rawdata//TEF_YearFour_AllMetrics.csv',stringsAsFactors=FALSE)
 #colnames(tef4file)
 tef4context<-read_csv('rawdata//TEF_YearFour_AllContext.csv')
+
+tefoutcomes<-read.csv('rawdata//tefoutcomes_goldetc.csv')
+
+tefoutcomes$award <- reorder(tefoutcomes$award, new.order=c(1, 4, 2, 3))
+#order is "Bronze"      "Silver"      "Gold"        "Provisional"
+
+ temp<-filter(tef4file,METRIC=='LEOAboveMedianEarningsThresholdOrFurtherStudy',SPLIT_CATEGORY=='Asian',MODEOFSTUDY=='FullTime',PROVIDER_NAME=='Aston University') #check if all read in OK
+ #Nope. Problem seems to be that read_csv assumes denom is an integer
+ ## NB Previously I used read_csv for tef4file: this created problems!
 }
 ```
 
@@ -136,7 +159,7 @@ tefcore <- filter(tef4file,split.id=='Core',denom>0,study.mode=='FullTime')
 #do plots by each metric and work out % in each band by size quartile
 tefcore$metric<-as.factor(tefcore$metric)
 
-mycols<-c('purple','blue','grey','pink','red')
+mycols<-c('blue','purple','darkgrey','deeppink','red')
 #levels(tefcore$metric)<-c('Support','Feedback','Continue','Employed','Skilled','LEOhigh','LEOsustain','Teaching')
 for (i in 1:length(levels(tefcore$metric))){
   temp<-filter(tefcore,metric==levels(tefcore$metric)[i])
@@ -205,30 +228,40 @@ Now, it could be argued that this is right because the estimate for a small inst
 
 
 ```{r plotraw,echo=FALSE}
-nucols<-c('orange','green','brown','black')
+nucols<-c('orange','blue','brown','black') #used for quartiles, 4 values
+nucols<-c('blue','brown','black') #use for division into 3 levels
+quantlabels<-c('Small','Med','Large','Huge') #used in plots
+quantlabels<-c('Small','Medium','Large')
+#NB length of nucols tells us how many groupings there are
 pchlist <-c(20,4,1,3,8) #attempt to use vaguely meaningful symbols
+myquants<-c(0.001, .25, .5,.75,1)#equivalent to default quantiles - 4 values
+myquants<-c(0.001, .33, 0.66,1) #use for 3 quantiles
 for (i in 1:length(levels(tefcore$metric))){
   temp<-filter(tefcore,metric==levels(tefcore$metric)[i])
-    temp$nquant <- as.numeric(cut(temp$denom, quantile(temp$denom,na.rm=TRUE), include.lowest = TRUE,labels=1:4))
+    temp$nquant <- as.numeric(cut(temp$denom, quantile(temp$denom,probs = myquants,na.rm=TRUE), include.lowest = TRUE,labels=1:length(nucols)))
 #  plot(log(temp$denom),temp$indicator,main=levels(tefcore$metric)[i],col=mycols[temp$flag],pch=15,
  #      ylab='% meeting Indicator',xlab='Log N in denominator')
  # legend("bottomright",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=TRUE)
-
+if(i==8){
+  png(filename = "sampleplot.png", width = 1200, height = 800,
+    pointsize = 10, bg = "white",res=200)
+}
   #look at how benchmarking affects flags
   plot(temp$zscore~temp$indicator,col=nucols[temp$nquant],pch=pchlist[temp$flag],
-       main=paste('Raw x z-score coded by size of HEI\n',main=levels(tefcore$metric)[i]),xlab='Indicator',ylab='z-score')
+       main=levels(tefcore$metric)[i],xlab='Indicator',ylab='z-score')
 # Add a legend
   legpos<-min(temp$indicator,na.rm=TRUE)
-legend(legpos, 15,title='N Quartile',legend=c('Small','Med','Large','Huge'),
-       col=nucols,pch=15,cex=.8)  
-legend(legpos+10, 15,title="Flag",c("--","-","=","+","++"), pch=pchlist,cex=.8)
+legend(legpos, 20,title='N students',legend=quantlabels,
+       col=nucols,pch=15,cex=1)  
+legend(legpos+10, 20,title="Flag",c("++","+","=","-","--"), pch=pchlist[5:1],cex=1)
  #Add regression lines separated by Nquartile
- for (n in 1:4){
+ for (n in 1:length(nucols)){
    thisfile<-filter(temp,nquant==n)
    myl<-lm(thisfile$zscore~thisfile$indicator)
-   abline(a=myl$coefficients[1],b=myl$coefficients[2],col=nucols[n])
+   abline(a=myl$coefficients[1],b=myl$coefficients[2],col=nucols[n],lty=2)
  }
-
+if(i==8)
+{dev.off()}
 
   #create table of means by quartile
   group_summary <- temp %>% 
@@ -272,13 +305,16 @@ hist(mysize$TOTAL_HEADCOUNT)
 #v skewed! try log
 hist(log(mysize$TOTAL_HEADCOUNT))
 
-#Suggests we could omit institutions with fewer than 500 students
-w<- which(mysize$TOTAL_HEADCOUNT > 500)
-includelist <- mysize$PROVIDER_NAME[w] #Most of those < 500 are specialist colleges
+#Suggests we could omit institutions with fewer than given N of students
+headcut<-0
+w<- which(mysize$TOTAL_HEADCOUNT > headcut)
+includelist <- mysize$PROVIDER_NAME[w] #Most of those with < 500 are specialist colleges
 
 mycontext <- filter(tef4context, PROVIDER_NAME %in% includelist)
+# ww<-which(mycontext$PROVIDER_NAME=='The Open University')
+# mycontext<-mycontext[-w,] #Remove the Open University - atypical!
 
-print(paste('N institutions with at least 500 headcount:  ',length(unique(mycontext$PROVIDER_NAME))))
+print(paste('N institutions with at least ',headcut,' headcount:  ',length(unique(mycontext$PROVIDER_NAME))))
 
 #select just these institutions from tefcore
 
@@ -286,6 +322,7 @@ tefcore2 <- filter(tefcore,uniname %in% includelist )
 
 
 ```
+
 
 
 The number of students on whom data is available appears quite variable from indicator to indicator.
@@ -297,10 +334,10 @@ I'll create a wide-form data frame,starting with just the overall data from myco
 mywide <- data.frame(filter(mycontext,CONTEXT_ID=='Overall',CONTEXT_CATEGORY=='Headcount' ))
 k<-length(mywide) #N columns
 #add columns for new variables
-mywide$NSS <- 0
-mywide$Continue <- 0
-mywide$Employ<-0
-mywide$Earn<-0
+mywide$NSS.denom <- 0
+mywide$Continue.denom <- 0
+mywide$Employ.denom<-0
+mywide$Earn.denom<-0
 mywide$NSS.p <- 0
 mywide$Continue.p <- 0
 mywide$Employ.p<-0
@@ -333,10 +370,10 @@ I wondered whether I'd misaligned the headcount values, but the distributions fo
 
 I am comparing across 2 files, so it's worth checking against some specific examples.
 
-```{r checkNcont}
+```{r checkNcont, include=FALSE}
 #Find those where N datapoints on continuations is > 105% relative to headcount
 w<-which(mywide$Continue.p>105)
-mywide$PROVIDER_NAME[w]
+mywide$PROVIDER_NAME[w] #print the list
 
 #Looks like these are mostly colleges of FE or new universities 
 #Let's now check a few original downloaded files - picking those that are universities
@@ -349,7 +386,7 @@ mytemp2<-filter(tef4file,uniname=='Leeds Trinity University')
 mytemp3<-filter(mytemp2,metric=='Continuation')
 ```
 
-This shows for Leeds Trinity University a denominator of 3100 for full time and 46 for part time students for .
+This shows for Leeds Trinity University a denominator of 3100 for full time and 46 for part time students for Continuation.
 So the denominator in the TEF4yr metric data is greater than the headcount in the contextual data.
 
 Maybe these are measured at different time points?
@@ -357,7 +394,7 @@ Maybe these are measured at different time points?
 # Redoing my original analyses with actual headcount rather than denominator
 
 
-```{r addsize}
+```{r addsize, include=FALSE}
 #Need to add the headcount variable for each institution to the tefcore2 file
 tefcore2$headcount <-0  #create column
 
@@ -373,7 +410,9 @@ for (i in 1: nrow(mywide)){
 
 #do plots by each metric and work out % in each band by size quartile
 
-mycols<-c('purple','blue','grey','pink','red')
+#NB the quartiles will change depending on the headcut cutoff used!
+
+mycols<-c('blue','purple','darkgrey','deeppink','red')
 #levels(tefcore$metric)<-c('Support','Feedback','Continue','Employed','Skilled','LEOhigh','LEOsustain','Teaching')
 for (i in 1:length(levels(tefcore2$metric))){
   temp<-filter(tefcore2,metric==levels(tefcore$metric)[i])
@@ -392,9 +431,9 @@ for (i in 1:length(levels(tefcore2$metric))){
 
 ```
 
-The effect of HEI size looks less striking if you take actual headcount rather than denominator.
+Initially I thought effect of HEI size looks less striking if you take actual headcount rather than denominator. But I think it's just that I also omitted the smaller institutions, and that will affect how the quartile groups are formed.
 
-This raises the question of the relationship between headcount and denominator
+Looked at relationship between headcount and denominator
 
 
 ```{r true.vs.denom}
@@ -404,6 +443,574 @@ for (i in 1:length(levels(tefcore2$metric))){
   temp<-filter(tefcore2,metric==levels(tefcore$metric)[i])
   plot(temp$headcount,temp$denom,main=levels(tefcore$metric)[i],col=mycols[temp$flag],
        ylab='denominator',xlab='N for headcount')
-  legend("topleft",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=TRUE)
+  legend("topleft",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=FALSE)
+  abline(a=0,b=1)
 }
+```
+
+And now see whether the Percentage entered in denominator relates to anything
+
+```{r true.vs.denom2}
+
+
+for (i in 1:length(levels(tefcore2$metric))){
+  temp<-filter(tefcore2,metric==levels(tefcore$metric)[i])
+  plot(temp$denom/temp$headcount,temp$zscore,main=levels(tefcore$metric)[i],col=mycols[temp$flag],
+       ylab='zscore',xlab='% entered')
+  legend("topleft",title="Flag",c("--","-","=","+","++"), fill=mycols,horiz=FALSE)
+ 
+}
+```
+
+What about postgrads - they dont have these metrics?
+
+Ah, here is some information about Continuation metrics from tef_year_three_technical_document, p. 17
+
+Fields used in the generation of the continuation metrics
+Linking between years
+45. In the continuation metrics for a given base year, we need to link to HESA, HESA AP and ILR data for the following year (for full-time students), and to HESA, HESA AP and ILR data for the previous year, following year and following year plus one (for part-time students).
+46. We link student data across years (both to data from your provider and from other providers) by combinations of first name(s), surname, date of birth, gender and (where available) home postcode and prior educational establishment (that is, the equivalent data linking method that HESA adopt for UK Performance Indicators). Spelling errors and other typographical errors (e.g. in dates) are taken into account.
+47. We link each record in the base year to every record we can find for that student in each year’s data, and consider only one record per student, mode and level at each provider using the method described in TEFCONEXCL256 in paragraph 59.
+
+So it looks like those with v high %s may be those with many part-timers?
+
+Let's check that out
+
+Hmm. Not easy to make sense. FTE is lower than headcount, but not necessarily because of part-timers. E.g. first entry in tef4context is ABI college.
+Overall total headcount = 90, FTE is 54, but total headcount is all full-timers with no part-timers.
+
+Previously created mysize which uses FTE rather than headcount - but this is an even lower figure, so can't explain the big denominator.
+
+So need to get a %FT  
+
+```{r part-timers}
+mywide$FT_percent <- mywide$FULLTIME_HEADCOUNT/mywide$TOTAL_HEADCOUNT
+plot(mywide$FT_percent,mywide$Continue.p,xlab='% Full Time',ylab='% Continuation')
+abline(h=100)
+
+
+```
+This shows part-timers cannot explain the mismatch, because those with v high % continuation often are those with 100% full-timers.
+
+
+Bit of report for OfS with examples
+
+```{r find.mismatchN}
+w <- which(mywide$Continue.p > 130)
+myegs <- mywide[w,]
+#just add the row numbers for relevant data in xls file
+provlist <- myegs$PROVIDER_TEFUKPRNTF
+contextbit <- intersect(which(tef4context$PROVIDER_TEFUKPRNTF %in%provlist),
+                        which(tef4context$CONTEXT_ID=='Overall'))
+contextbit <-1+intersect(contextbit,
+                        which(tef4context$CONTEXT_CATEGORY=='Headcount'))  
+myegs$xlrow.context <-contextbit
+
+contextbit2 <- intersect(which(tef4file$UKPRN %in%provlist),
+                        which(tef4file$split.id=='Core'))
+contextbit2 <- intersect(contextbit2,
+                        which(tef4file$study.mode=='FullTime'))
+contextbit2 <-1+intersect(contextbit2,
+                        which(tef4file$metric=='Continuation'))  
+
+myegs$xlrow.context <-contextbit
+myegs$xlrow.metrics <-contextbit2
+write.table(myegs,'Eg_for_OFS.csv',sep=",")
+```
+
+A further thought was that maybe the total headcount in these cases represented the numerator rather than denominator.
+But a spot check of first three entries in myegs indicates that the numerator is always bigger than the headcount!!
+
+Also I think the yr 1, yr 2 and yr 3 Ns should total to the Core, but they don't always.
+So let's add yr1 yr2 and y3 as well as Core numerator to the wide file
+
+```{r N.by.year, include=FALSE}
+#create extra cols
+mywide$Core.cont.num <-NA
+mywide$Y1.cont.num <-NA
+mywide$Y2.cont.num <-NA
+mywide$Y3.cont.num <-NA
+mywide$Core.cont.denom <-NA
+mywide$Y1.cont.denom <-NA
+mywide$Y2.cont.denom <-NA
+mywide$Y3.cont.denom <-NA
+lastcol<-length(mywide) #this col used to reference the denom and num cols
+
+
+for (i in 1: nrow(mywide)){
+  temp<-filter(tef4file,uniname==mywide$PROVIDER_NAME[i],metric=='Continuation',
+               study.mode=='FullTime',split.id %in% c('Year','Core'))
+  if (nrow(temp)>0){
+  mywide[i,(lastcol-7):(lastcol-4)]<-temp$numerator
+  mywide[i,(lastcol-3):(lastcol)]<-temp$denom
+
+  }
+}
+mywide$Nmismatch<-0 #create new column to hold mismatch flag
+s<-rowSums(mywide[,(lastcol-2):(lastcol)]) #sum of yr 1 to 3
+t<-mywide[,(lastcol-3)] #Core value
+mywide$Nmismatch <-s-t
+
+w<-which(mywide$Nmismatch!=0)
+print(mywide$PROVIDER_NAME[w])
+N.mismatch<-mywide[w,]
+write.table(N.mismatch,'MismatchNdata_by_yr.csv',sep=",")
+
+```
+
+Scrutinising these cases, it seems that where the data is missing it is coded as SUP, which means insufficient data to form the benchmark.
+But this is not same as low N responses. 
+
+new thought: look at distribution for subject of study: this used for benchmarking
+qu of how many (and which) institutions are contributing to benchmark
+
+```{r subjects}
+subdata <- filter(tef4context, CONTEXT_ID=='SubjectOfStudy',PROVIDER_MAJORITYMODE=='FullTime')
+subdata$CONTEXT_CATEGORY<-as.factor(subdata$CONTEXT_CATEGORY)
+mysublist<-levels(subdata$CONTEXT_CATEGORY)
+for (i in mysublist){
+  f<-filter(subdata,CONTEXT_CATEGORY==i)
+  w<-which(f$TOTAL_HEADCOUNT>0)
+  f<-f[w,]
+aggdata <-aggregate(f$TOTAL_HEADCOUNT, by=list(f$PROVIDER_NAME),
+  FUN=sum, na.rm=TRUE)
+colnames(aggdata)<-c(i,'N')
+aggdata<-aggdata[order(-aggdata$N),]
+print(aggdata)
+}
+```
+
+This clarifies what concerns me about benchmarking.
+Suppose we have 2 institutions, one excellent and one terrible.
+The excellent one, X, cherishes its students, so they do not drop out.
+The terrible one, Y, is only interested in their fees, and is quite happy for them to drop out.
+
+The excellent one offers courses in A and B, and has 1000 students in each.
+The terrible one offers courses in C and D, and has 1000 students in each.
+
+Benchmarking takes into account the course offered. So X is evaluated relative to itself, and Y relative to itself. 
+
+If we scale this up, with the idea that less good institutions tend to offer different courses than good ones, then it becomes clear that benchmarking is seriously problematic.
+
+'Through benchmarking, the TEF metrics take into account the entry qualifications and characteristics of students, and the subjects studied, at each university or college. These can be very different and TEF assessment is based on what each college or university achieves for its particular students within this context. The metrics are also considered alongside further contextual data, about student characteristics at the provider as well as the provider’s location and provision.'  tef-year-four-metrics-and-contextual-data.pdf
+
+'In addition, the OfS has published a suite of technical documents that describe the algorithms used to derive the indicators from the underlying student data, DLHE survey and NSS data. A workbook containing sector averages used in the benchmarking calculations has also been published. These are available at www.officeforstudents.org.uk/advice-and-guidance/teaching/assessment-timeline/technical-guidance-for-participants/'  ofs2018_45_yr4 procedural guidance.pdf
+
+# Mean and SE plots for indicators (cf ONS)
+Let's look at year 4 data for institutions with > 1000 (use continuation numerator for this)
+
+```{r plotmeans}
+#Add TEFoutcomes
+
+tefcore2$award <- 5 #default if no score
+withoutcomes <- tefoutcomes$ukprn
+
+for (i in 1:length(withoutcomes)){
+  w<-which(tefcore2$UKPRN==withoutcomes[i])
+  tefcore2$award[w]<-tefoutcomes$award[i]
+}
+
+levels(tefcore2$metric)<-c('NSS.Support','NSS.Assessment','Continuation','Employment','HighSkilled','LEO.Earnings','LEO.Sustained','NSS.Teaching')
+
+for (j in 1:length(levels(tefcore2$metric))){
+  i<-levels(tefcore2$metric)[j]
+  f<-filter(tefcore2,metric==i)
+  f<-filter(f,denom>1000)
+  f$indicator<-f$indicator/100
+  f$se.p<-sqrt(f$indicator*(1-f$indicator)/f$denom)
+  f<-f[order(f$denom),]
+  f$flag<-as.factor(f$flag)
+  f$award <-as.factor(f$award)
+  levels(f$award)<-c('Bronze','Silver','Gold','Provisional')
+  
+g<-ggplot(f, aes(x=denom, y=indicator,col=f$flag)) + 
+    geom_errorbar(aes(ymin=indicator-1.96*se.p, ymax=indicator+1.96*se.p), width=.1) +
+  geom_point()+
+  ylim(.5,1)+
+  scale_x_continuous(trans='log10')+
+  ggtitle(i)+
+  xlab('N students (denominator)')+
+  ylab('Proportion meeting criterion')
+#g <- g+ scale_color_manual(values=c('brown','azure3','orange','blue','darkgrey'))
+#colours for award
+
+g <- g+ scale_color_manual(values=mycols)
+print(i)
+ mytab<- table(f$award,f$flag)
+ mytab<-mytab[1:3,]
+ print(lbl_test(mytab))
+ print(g)  
+
+}
+```
+N.B associations between flags and award strongest for NSS scores.
+
+
+Some oddities. Why does Portsmouth (which got a gold) have a + flag for continuation with a relatively unremarkable Completion rate.
+Looking at context, doesn't suggest it is particularly high on rates of deprivation etc.
+
+
+```{r portsmouth}
+portscontext<-filter(tef4context,PROVIDER_NAME=='University of Portsmouth')
+portsmetric<-filter(tefcore2,uniname=='University of Portsmouth')
+portsall<-filter(tef4file,uniname=='University of Portsmouth')
+```
+
+Impression in the tef4file data is that a benchmark is computed separately for each split, rather than for combinations?
+That should be easy to check by just looking at entire file?
+Need sum for each split category for num and denom
+```{r splits}
+agg.all <-aggregate(tef4file$numerator, by=list(tef4file$metric,tef4file$split.cat),
+  FUN=sum,na.rm=TRUE)
+colnames(agg.all)<-c('metric','split','numerator')
+agg.denom <-aggregate(tef4file$denom, by=list(tef4file$metric,tef4file$split.cat),
+  FUN=sum, na.rm=TRUE)
+agg.all$denom<-agg.denom$x
+agg.all$computed.bench<-agg.all$numerator/agg.all$denom #some are > 100% : must have missing on just one index for some institutions?
+# (With hindsight, it was this calculation that made me aware of the problem with read_csv dropping nonintegers!)
+#I had thought we might get same benchmark for a given split but we don't- benchmarks are higher for golden triangle etc even within a split.
+```
+
+# Let's look at disadvantage
+```{r disadvantage}
+my.disadv <- filter(tef4file, split.cat=='IMD_Disadvantaged',metric=='Continuation',majmode=='FullTime',study.mode=='FullTime')
+my.adv <- filter(tef4file, split.cat=='IMD_NotDisadvantaged',metric=='Continuation',majmode=='FullTime',study.mode=='FullTime')
+my.disadv$percent.dis <-my.disadv$denom/(my.disadv$denom+my.adv$denom)
+my.disadv<-my.disadv[order(my.disadv$benchmark),]
+my.disadv<-my.disadv[,c(1,5,9:12,20,13:19)] #just to help visibility of data
+plot(my.disadv$percent.dis,my.disadv$benchmark)
+
+#why are some values of percent.dis > 100??
+#temp<-filter(tef4file,metric=='LEOAboveMedianEarningsThresholdOrFurtherStudy',split.cat=='Asian',study.mode=='FullTime')
+
+## Aaargh! Spent some time checking and it turns out I used read_csv which assumed denominator was
+## integer, and deleted values that were not.
+```
+
+# Check out what % response rates there are for different indicators
+tef4file - need to add headcount for institution from context file alongside the various indicators.
+So we can divide the *denominators* by headcount to get % response.
+Worth doing this with splits preserved, as we may find that response rates vary with things like ethnicity or disadvantage.
+Take fulltime only
+
+I did this in a very clunky way with loops and matching.
+I'm sure there are better ways in tidyverse!
+This takes a few minutes to run, so I have saved the file with the headcount and %s added
+
+Also set default to read the saved file rather than recompute.
+```{r response.rate}
+#we are going to add a column to tef4context that gives denominator for that HEI and category
+readheads <- 1
+if(readheads==1){
+  tef4file<-read.csv('tef4file_headcounts.csv')
+}
+if(readheads==0){
+tef4file$headcount<-NA #initialise column
+tef4file$percent.data<-NA #initialise column
+myinstlist <- unique(tef4context$PROVIDER_NAME)
+mycats1 <-unique(tef4file$split.cat)
+mycats2<-unique(tef4context$CONTEXT_CATEGORY)
+mycats<-intersect(mycats1,mycats2)
+mymetrics <-unique(tef4file$metric)
+for (i in 1:length(myinstlist)){
+  for (j in 1:length(mycats)){
+    for(k in 1:length(mymetrics)){
+    m1 <-intersect(which(tef4file$study.mode=='FullTime'),
+                  which(tef4file$metric==mymetrics[k]))
+    m2<-intersect(which(tef4file$split.cat==mycats[j]),
+                        which(tef4file$uniname==myinstlist[i]))
+    m<-intersect(m1,m2)
+    w<-intersect(which(tef4context$PROVIDER_NAME==myinstlist[i]),
+                 which(tef4context$CONTEXT_CATEGORY==mycats[j]))
+    if(length(w)==1){
+      tef4file$headcount[m] <-tef4context$FULLTIME_HEADCOUNT[w]
+    }
+    }
+  }
+}
+tef4file$percent.data<-tef4file$denom/tef4file$headcount
+tef4file$percent.data2<-tef4file$numerator/tef4file$headcount
+#For continuation, only those who continue are in headcount, so need numerator rather
+#than denominator!
+w<-which(tef4file$metric=='Continuation')
+tef4file$percent.data[w]<-tef4file$percent.data2[w]
+w<-which(tef4file$headcount==0)
+tef4file$percent.data[w]<-NA
+
+write.csv(tef4file,'tef4file_headcounts.csv')
+}
+mymetrics <-unique(tef4file$metric)
+#now can do aggregation as before
+
+agg.percent.data <-aggregate(tef4file$percent.data, by=list(tef4file$metric,tef4file$split.cat),
+  FUN=mean, na.rm=TRUE)
+
+#look at each metric separately by institution - just males and females
+for (j in 1:length(mymetrics)){
+  f<-filter(tef4file,split.cat=='Female',metric==mymetrics[j],study.mode=='FullTime',
+            percent.data<2)
+#check data for Continuation
+  if(mymetrics[j]=='Continuation'){
+    plot(f$headcount,f$numerator) #remember we need numerator rather than denominator for Continuation
+    hist(f$percent.data)
+    abline(a=0,b=1)
+    ff<-f[order(f$percent.data),]
+  }
+  #the percent.data is really a proportion and shouldn't be more than 1!
+#One entry (Richmond on Thames college) has value > 15  so clearly an error
+  plot(f$percent.data,f$zscore,main=mymetrics[j])
+  print(paste0(mymetrics[j],': Mean = ',mean(f$percent.data),", SD = ",sd(f$percent.data)))
+  
+}  
+
+
+
+```
+
+I'd like to check out the characteristics of institutions with Gold/Silver/Bronze.
+
+Start with tefoutcomes, and then add:
+a) From context file, the N students, and %s for PT, male, BME, disabled, disadvantage, STEM
+b) from core data, % meeting each criterion, benchmark, and z.
+
+We can then get an idea of how well context data predicts both benchmark and award.
+
+NB TEF outcomes has fewer institutions than tef4data - I think it's the smaller FE colleges etc that are missing. 
+If new benchmarks include these, not clear if this would affect anything. Probably not as they are small.
+
+```{r context.with.benchmarks}
+tefoutcomes$headcount <- NA #initialise
+tefoutcomes$p.ft<-NA #proportion full time
+tefoutcomes$p.male<-NA #proportion male
+tefoutcomes$p.white<-NA #proportion white
+tefoutcomes$p.mature<-NA #proportion over30
+tefoutcomes$p.stem<-NA #proportion with subjects 1-16
+
+tefoutcomes2<-tefoutcomes[order(tefoutcomes$ukprn),] #order by ukprn - ensures same order if matching
+
+tef4context<-tef4context[order(tef4context$PROVIDER_TEFUKPRNTF),]
+
+f<-filter(tef4context,CONTEXT_CATEGORY=='Headcount')
+
+w<-which(f$PROVIDER_TEFUKPRNTF %in% tefoutcomes2$ukprn)
+#hmm; length of w is less than tefoutcomes; must be some in outcomes without data in f
+#Although I could just delete non-matching ones, I'd prefer to keep so I can see what they are.
+#Although there must be a much better way of doing this in tidyverse, I'm back to loops!
+
+for (i in 1:length(tefoutcomes2$ukprn)){
+  ww<-which(f$PROVIDER_TEFUKPRNTF==tefoutcomes2$ukprn[i])
+  if(length(ww)>0){
+    tefoutcomes2$headcount[i] <- f$TOTAL_HEADCOUNT[ww]
+    tefoutcomes2$p.ft[i] <- f$FULLTIME_HEADCOUNT[ww]/f$TOTAL_HEADCOUNT[ww]
+  }
+  
+}
+#Missing ones are non English ones!
+#They won't have data on context etc so we will delete these rows
+m <-c(which(is.na(tefoutcomes2$headcount)))
+tefoutcomes2<-tefoutcomes2[-m,]
+
+#Should be able to get % male by just dividing N male by headcount
+#But I don't really trust the data! So prefer to divide N male by N male+female
+f1<-filter(tef4context,CONTEXT_CATEGORY=='Male')
+f2<-filter(tef4context,CONTEXT_CATEGORY=='Female')
+pmale <-f1$TOTAL_HEADCOUNT/(f1$TOTAL_HEADCOUNT+f2$TOTAL_HEADCOUNT)
+temp3<-data.frame(cbind(f1$PROVIDER_TEFUKPRNTF,f2$PROVIDER_NAME,f1$TOTAL_HEADCOUNT,f2$TOTAL_HEADCOUNT,pmale))
+#added temp3 to check why this was giving wrong results
+tefoutcomes2$p.male <-pmale[w]
+
+#Follow same pattern for BME
+f1<-filter(tef4context,CONTEXT_CATEGORY=='White')
+f2<-filter(tef4context,CONTEXT_CATEGORY=='Black')
+f3<-filter(tef4context,CONTEXT_CATEGORY=='Asian')
+f4<-filter(tef4context,CONTEXT_CATEGORY=='Other')
+f5<-filter(tef4context,CONTEXT_CATEGORY=='Unknown') 
+#need to omit 'unknown' from calcs
+
+pwhite <-f1$TOTAL_HEADCOUNT/(f1$TOTAL_HEADCOUNT+f2$TOTAL_HEADCOUNT+
+                               f3$TOTAL_HEADCOUNT+f4$TOTAL_HEADCOUNT)
+tefoutcomes2$p.white <-pwhite[w]
+
+#Follow same pattern for over30
+f1<-filter(tef4context,CONTEXT_CATEGORY=='Under21')
+f2<-filter(tef4context,CONTEXT_CATEGORY=='21to30')
+f3<-filter(tef4context,CONTEXT_CATEGORY=='Over30')
+
+pmature <-f3$TOTAL_HEADCOUNT/(f1$TOTAL_HEADCOUNT+f2$TOTAL_HEADCOUNT+
+                               f3$TOTAL_HEADCOUNT)
+tefoutcomes2$p.mature <-pmature[w]
+
+
+#Follow same pattern for Disabled
+f1<-filter(tef4context,CONTEXT_CATEGORY=='Disabled')
+f2<-filter(tef4context,CONTEXT_CATEGORY=='NotDisabled')
+
+pdisabled <-f1$TOTAL_HEADCOUNT/(f1$TOTAL_HEADCOUNT+f2$TOTAL_HEADCOUNT
+                             )
+tefoutcomes2$p.disabled <-pdisabled[w]
+
+
+#Follow same pattern for Disadvantaged - take polar quintile 1-2
+f1<-filter(tef4context,CONTEXT_CATEGORY=='Quintile1',CONTEXT_ID=='POLAR_Disadvantage')
+f2<-filter(tef4context,CONTEXT_CATEGORY=='Quintile2',CONTEXT_ID=='POLAR_Disadvantage')
+f3<-filter(tef4context,CONTEXT_CATEGORY=='Quintile3',CONTEXT_ID=='POLAR_Disadvantage')
+f4<-filter(tef4context,CONTEXT_CATEGORY=='Quintile4',CONTEXT_ID=='POLAR_Disadvantage')
+f5<-filter(tef4context,CONTEXT_CATEGORY=='Quintile5',CONTEXT_ID=='POLAR_Disadvantage')
+
+  pquint12 <-(f1$TOTAL_HEADCOUNT+f2$TOTAL_HEADCOUNT)/(f1$TOTAL_HEADCOUNT+f2$TOTAL_HEADCOUNT+
+                 f3$TOTAL_HEADCOUNT+f4$TOTAL_HEADCOUNT+f5$TOTAL_HEADCOUNT)
+                             
+tefoutcomes2$p.polar12 <-pquint12[w]
+
+
+#Subject categorisation needs its own approach
+#I'll just try STEM vs nonSTEM
+for (i in 1:nrow(tefoutcomes2)){
+f1<-filter(tef4context,CONTEXT_ID=='SubjectOfStudy',tef4context$PROVIDER_TEFUKPRNTF==tefoutcomes2$ukprn[i])
+if(nrow(f1)>0){
+  mynum<-sum(f1$TOTAL_HEADCOUNT[1:16]) #first 16 subjects are STEMlike
+  mydenom<-sum(f1$TOTAL_HEADCOUNT)
+  tefoutcomes2$p.stem[i] <-mynum/mydenom
+  }
+}
+
+#make a numeric code for award
+tefoutcomes2$alevel <- 4
+w<-which(tefoutcomes2$award=="Bronze")
+tefoutcomes2$alevel[w]<-3
+w<-which(tefoutcomes2$award=="Silver")
+tefoutcomes2$alevel[w]<-2
+w<-which(tefoutcomes2$award=="Gold")
+tefoutcomes2$alevel[w]<-1
+```
+
+Next we need to add on the TEF data -
+
+```{r add.tef}
+basecat<-c('teach','assess','support','cont','employ','skilled','sustained','abovemed')
+colcat<-c('num','den','ind','bench','diff','z','flag')
+adddat <-data.frame(matrix(NA,nrow=nrow(tefoutcomes2),ncol=7*8))
+k<-0
+for (i in 1:length(basecat)){
+  for (j in 1:length(colcat)){
+    k<-k+1
+    colnames(adddat)[k]<-paste0(basecat[i],'.',colcat[j])
+  }
+}
+colcounter <- length(tefoutcomes2)
+tefoutcomes3<-cbind(tefoutcomes2,adddat)
+
+mycore <- filter(tef4file,study.mode=='FullTime',split.cat=='Core')
+colcode<- which(colnames(mycore) %in% c("numerator","denom","indicator", "benchmark", "diff","zscore","flag"  ))
+for (r in 1:nrow(tefoutcomes2)){
+  myc <- colcounter
+   f<-filter(mycore,UKPRN==tefoutcomes2$ukprn[r])
+   for (i in 1:length(basecat)){
+  for (j in 1:length(colcat)){
+    myc<-myc+1
+    tefoutcomes3[r,myc]<-f[i,colcode[j]]
+    }
+   }
+}
+```
+Now see what is predicting benchmarked scores!
+(NB we are currently working with year 4 data but the awards are from year 3)
+
+```{r predict.bench}
+#can you predict benchmark from the context variables?
+for (i in 1:length(basecat)){
+  thiscol<-paste0(basecat[i],'.bench')
+  w<-which(colnames(tefoutcomes3)==thiscol)
+  
+print(thiscol)
+fit <- lm( tefoutcomes3[,w]~  headcount+ p.ft + p.male+p.white+p.mature+p.stem+p.disabled+p.polar12, data=tefoutcomes3)
+print(summary(fit)) # show results
+}
+
+```
+This prediction is good - predictors and strength of prediction vary from one variable to another.
+
+But next qu is how does z score vary with predictors - if benchmarking works, this should not have effect?
+
+```{r predict.z}
+#can you predict z from the context variables?
+for (i in 1:length(basecat)){
+  thiscol<-paste0(basecat[i],'.z')
+  w<-which(colnames(tefoutcomes3)==thiscol)
+  
+print(thiscol)
+fit <- lm( tefoutcomes3[,w]~  headcount+ p.ft + p.male+p.white+p.mature+p.stem+p.disabled+p.polar12, data=tefoutcomes3)
+print(summary(fit)) # show results
+}
+
+```
+
+```{r predict.indicator}
+#can you predict z from the context variables?
+for (i in 1:length(basecat)){
+  thiscol<-paste0(basecat[i],'.ind')
+  w<-which(colnames(tefoutcomes3)==thiscol)
+  
+print(thiscol)
+fit <- lm( tefoutcomes3[,w]~  headcount+ p.ft + p.male+p.white+p.mature+p.stem+p.disabled+p.polar12, data=tefoutcomes3)
+print(summary(fit)) # show results
+}
+
+```
+```{r aggregations}
+
+
+#now do some aggregations
+
+aggmean<-aggregate(tefoutcomes2[6:13], by=list(tefoutcomes2$award),
+  FUN=mean, na.rm=TRUE)
+aggsd<-aggregate(tefoutcomes2[6:13], by=list(tefoutcomes2$award),
+  FUN=sd, na.rm=TRUE)
+
+#tefoutcomes3<-filter(tefoutcomes2,award%in%c('Gold','Silver','Bronze'))
+tefoutcomes3<-tefoutcomes2
+
+
+#can you predict award from the context variables?
+fit <- lm( alevel~  headcount+ p.ft + p.male+p.white+p.mature+p.stem+p.disabled+p.polar12, data=tefoutcomes3)
+summary(fit) # show results
+
+write.csv(aggmean,'meanbyaward.csv')
+
+#reorder by name of HEI to make it easier to scrutinise
+
+tefoutcomes3<-tefoutcomes3[order(tefoutcomes3$alevel),]
+
+```
+
+Case studies: can we understand why LSE and Southampton got bronze but Coventry and Portsmouth got gold?
+
+```{r case.study}
+#First restrict focus to those with N > 9000
+tefcase <- filter(tefoutcomes3,headcount>9000)
+
+#This gives
+#    Bronze      Silver        Gold Provisional 
+ #         5          37          29           0 
+
+tefcase$award<-factor(tefcase$award) #drops unused level Provisional!
+tefcase$unicode<-tefcase$ukprn-10000000
+tefcase<-tefcase[order(tefcase$ukprn),]
+mycols<-c('brown','white','black')
+plot(tefcase$teach.ind,tefcase$teach.z,col=mycols[tefcase$alevel],pch='.')
+with(tefcase,text(teach.ind,teach.z, labels = unicode,cex=.6,col=mycols[tefcase$alevel]))
+
+
+plot(tefcase$assess.ind,tefcase$assess.z,col=mycols[tefcase$alevel],pch='.')
+with(tefcase,text(assess.ind,assess.z, labels = unicode,cex=.6,col=mycols[tefcase$alevel]))
+
+plot(tefcase$support.ind,tefcase$support.z,col=mycols[tefcase$alevel],pch='.')
+with(tefcase,text(support.ind,support.z, labels = unicode,cex=.6,col=mycols[tefcase$alevel]))
+
+plot(tefcase$cont.ind,tefcase$cont.z,col=mycols[tefcase$alevel],pch='.')
+with(tefcase,text(cont.ind,cont.z, labels = unicode,cex=.6,col=mycols[tefcase$alevel]))
+
+plot(tefcase$employ.ind,tefcase$employ.z,col=mycols[tefcase$alevel],pch='.')
+with(tefcase,text(employ.ind,employ.z, labels = unicode,cex=.6,col=mycols[tefcase$alevel]))
+
 ```
