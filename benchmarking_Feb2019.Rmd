@@ -58,6 +58,14 @@ colnames(smallworldN)<-c('YoungM','YoungF','MatureM','MatureF')
 rownames(smallworldoutcomes) <- toynames
 rownames(smallworldN) <- toynames
 
+# Adjust proportions to account for rounding error
+smallworldCounts = round(smallworldN*smallworldoutcomes)
+smallworldoutcomes = smallworldCounts/max(smallworldN,1)
+# "Plus 2" rule to regularise standard errors
+smallworldCounts = smallworldCounts+2
+smallworldN = smallworldN+4
+smallworldoutcomes = smallworldCounts/smallworldN
+
 smallworldoutcomes  %>% kable(booktabs = T, caption = "Small World Example from Draper (2006), % Students completing") %>% 
   kable_styling()
 smallworldN %>% kable(booktabs = T, caption = "Small World Example, N") %>% 
@@ -220,7 +228,6 @@ return(allz)
 
 ```{r smallworldSE, echo=FALSE}
 # apply makeSE to Draper's toy data
-
 mymult<-.5 #multiplier for lambda term in DB version: ignore this for now
 toyz<-makeSE(smallworldoutcomes, smallworldN,mymult)
 #last term in function is multiplier for lambda in the DB version
@@ -251,55 +258,39 @@ Furthermore, extreme z-scores are much more common in big than in small institut
 ```{r simforbench, echo=FALSE}
 #simulate many unis on 2 x 2 contextual factors
 # User can specify mean and SD for the benchmark
-for (mysd in c(.2)){ #can look at impact of varying SD by specifying a list of values here
-for(mymean in c(.6)){#mean benchmark level
-  rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
-#if you have already run this, data are saved as RDS and can just be reloaded (see below) if you set rerun to zero
-mymult<-.5 #multiplier for the lambda term in DB version - to be explained later
-nuni<-100
-ncontext<-4 #N contextual factors combinations (as in 'small world' simulation)
+# (Stdev implied from N & mymean)
+for(mymean in c(.6)){ # mean benchmark level; probability that a student passes 
+    rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
+    #if you have already run this, data are saved as RDS and can just be reloaded (see below) if you set rerun to zero
+    mymult<-.5 #multiplier for the lambda term in DB version - to be explained later
+    nuni<-100
+    ncontext<-4 #N contextual factors combinations (as in 'small world' simulation)
+    
+    myNmat <-data.frame(matrix(pmax(50,rnorm(nuni*ncontext,500,200)),nrow=nuni)) # just set N as random for each cell
+    myNmat <- round(myNmat)
 
+    mymat <- data.frame(matrix(rbinom(nuni*ncontext,unlist(myNmat),mymean),nrow=nuni))/myNmat
+    
+    fileRDS<-paste0('simulated data/simulated_z_Nuni',nuni,'_ncontext',ncontext,'_mean',mymean,'_sd',mysd,'_mult',mymult,'_logN')  ##filename for saving simz to RDS
 
-mymat <- data.frame(matrix(rnorm(nuni*ncontext,mymean,mysd),nrow=nuni))
+    if(rerun==0){
+        simz<-readRDS(fileRDS)  #if this file exists, just read it in
+        }
+    if (rerun==1){
+        simz<-makeSE(mymat,myNmat,mymult) #this line recreates the simulated results - slow to run
+    }
+    
+    saveRDS(simz, fileRDS) #save the data to RDS format - can just load in on rerun
+    
+    #Plot the z-scores
+    hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score',col='red')
+    w<-which(abs(simz[,5])>3) #zscore > 2
+    mytext<-paste0('% with absolute z-score > 3 = ',100*length(w)/nuni,'%')
+    text(80,100,mytext,cex=.8)
 
-mymat[mymat>1]<-.99 #censor values > 1 
+    #Second plot shows how z-scores relate to sample size, using logN
+    plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
 
-myNmat <-data.frame(matrix(rnorm(nuni*ncontext,500,100),nrow=nuni)) # just set N as random for each cell
-
-#it's possible to simulate more realistic Ns etc, e.g. 
-# use random number as a multiplier reflecting total N at institution
-# then use exp(N*runif()) to then specify  Ns for cells
-# This code does that - generates skewed distribution with some v large N
-  myN <- rnorm(nuni,8,1) #arbitrary number selected to give realistic looking Ns
-  myNmat <- data.frame(matrix(runif(nuni*ncontext),nrow=nuni)) #proportions in cells are random
-  for (i in 1:nuni){
-  myNmat[i,]<-round(100+exp(myNmat[i,]*myN[i]),0)
-  }
-myNmat<-  round(myNmat,0)
-
-
-
-fileRDS<-paste0('simulated data/simulated_z_Nuni',nuni,'_ncontext',ncontext,'_mean',mymean,'_sd',mysd,'_mult',mymult,'_logN')  ##filename for saving simz to RDS
-
-if(rerun==0){
-simz<-readRDS(fileRDS)  #if this file exists, just read it in
-}
-if (rerun==1){
-  simz<-makeSE(mymat,myNmat,mymult) #this line recreates the simulated results - slow to run
-}
-
-saveRDS(simz, fileRDS) #save the data to RDS format - can just load in on rerun
-
-#Plot the z-scores
-hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score',col='red')
-w<-which(abs(simz[,5])>3) #zscore > 2
-mytext<-paste0('% with absolute z-score > 3 = ',100*length(w)/nuni,'%')
-text(80,100,mytext,cex=.8)
-
-#Second plot shows how z-scores relate to sample size, using logN
-plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
-
-}
 }
 
 ```
@@ -327,7 +318,7 @@ tef2url<-'https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd
 if(!dir.exists('rawdata')){dir.create('rawdata')}
 # Download data if not already downloaded
 if(!file.exists("rawdata/TEF_y2_AllMetrics.csv")){
-  download.file(tef4Url,destfile="rawdata/TEF_yr_AllMetrics.csv")}
+  download.file(tef2url,destfile="rawdata/TEF_y2_AllMetrics.csv")}
 tef2017file<-read_csv('rawdata//TEF_y2_AllMetrics.csv',na = c(" ","N/A","")) %>% clean_names()
 
 #Argh - has all sorts of missing data codes in here that make everything read as characters
