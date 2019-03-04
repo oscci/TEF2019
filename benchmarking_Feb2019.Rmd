@@ -5,12 +5,12 @@ author: "Dorothy Bishop, with thanks to Alistair Bailey for help with code impro
 date: "2nd March 2019"
 always_allow_html: yes
 output:
-  html_document: default
-  pdf_document: default
-  word_document: default
+html_document: default
+pdf_document: default
+word_document: default
 ---
-  
-```{r setup, include=FALSE}
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 # For pretty tables
 library(kableExtra)
@@ -20,6 +20,8 @@ library(janitor)
 ```
 
 ## Benchmarking and the TEF
+Updated March 4th, with input from Tom Nichols and Paul Thompson.
+
 N. B. This gives the background and computations relevant to this blogpost
 http://deevybee.blogspot.com/2019/03/benchmarking-in-tef-something-doesnt.html
 
@@ -58,16 +60,19 @@ colnames(smallworldN)<-c('YoungM','YoungF','MatureM','MatureF')
 rownames(smallworldoutcomes) <- toynames
 rownames(smallworldN) <- toynames
 
+#NB Tom Nichols added a bit of code to incorporate a rounding error correction.
+#However, the script only replicates the D&G toy example exactly if you omit this!
+#I've therefore made this bit of code optional: it is not crucial in any case.
 tombit<-0 #change tombit to one to incorporate rounding error correction by
-#Tom Nichols, below. This, however, makes computed z's disagree with Draper e.g.!
+#Tom Nichols
 if (tombit==1){
-# Adjust proportions to account for rounding error
-smallworldCounts = round(smallworldN*smallworldoutcomes)
-smallworldoutcomes = smallworldCounts/max(smallworldN,1)
-# "Plus 2" rule to regularise standard errors
-smallworldCounts = smallworldCounts+2
-smallworldN = smallworldN+4
-smallworldoutcomes = smallworldCounts/smallworldN
+  # Adjust proportions to account for rounding error
+  smallworldCounts = round(smallworldN*smallworldoutcomes)
+  smallworldoutcomes = smallworldCounts/max(smallworldN,1)
+  # "Plus 2" rule to regularise standard errors
+  smallworldCounts = smallworldCounts+2
+  smallworldN = smallworldN+4
+  smallworldoutcomes = smallworldCounts/smallworldN
 }
 smallworldoutcomes  %>% kable(booktabs = T, caption = "Small World Example from Draper (2006), % Students completing") %>% 
   kable_styling()
@@ -80,31 +85,31 @@ Essentially, the obtained score for an institution is an average of indicator va
 ```{r benchmark_function, include=TRUE}
 #################################################################################
 makebenchmark<- function(outcomes,Ns){
-phat<-rep(0,nrow(Ns))
-pj<-rep(0,ncol(Ns))
-for (i in 1:nrow(Ns)){
-  for (j in 1:ncol(Ns)){
-  phat[i]<-phat[i]+(outcomes[i,j]*Ns[i,j])
-  pj[j]<-pj[j]+(outcomes[i,j]*Ns[i,j])
+  phat<-rep(0,nrow(Ns))
+  pj<-rep(0,ncol(Ns))
+  for (i in 1:nrow(Ns)){
+    for (j in 1:ncol(Ns)){
+      phat[i]<-phat[i]+(outcomes[i,j]*Ns[i,j])
+      pj[j]<-pj[j]+(outcomes[i,j]*Ns[i,j])
+    }
   }
-}
-phat<-phat/rowSums(Ns) #this is weighted mean for each institution -ie obs value
-pj<-pj/colSums(Ns) #this is weighted mean for each context category (PCF)
-
-expvalue<-rep(0,nrow(Ns))
-for (i in 1:nrow(Ns)){
-  for (j in 1:ncol(Ns)){
-  expvalue[i]<-expvalue[i]+(Ns[i,j]*pj[j])
+  phat<-phat/rowSums(Ns) #this is weighted mean for each institution -ie obs value
+  pj<-pj/colSums(Ns) #this is weighted mean for each context category (PCF)
+  
+  expvalue<-rep(0,nrow(Ns))
+  for (i in 1:nrow(Ns)){
+    for (j in 1:ncol(Ns)){
+      expvalue[i]<-expvalue[i]+(Ns[i,j]*pj[j])
+    }
   }
-}
-expvalue<-expvalue/rowSums(Ns) #this is benchmark value
-diff <- phat-expvalue #percentage points difference from benchmark
-myrowsums<-rowSums(Ns) #total N for institution
-
-#make a little data frame to contain benchmarking results
-allbench<-data.frame(cbind(myrowsums,phat,expvalue,diff))
-colnames(allbench) <- c('N','observed','benchmark','diff')
-return(allbench)
+  expvalue<-expvalue/rowSums(Ns) #this is benchmark value
+  diff <- phat-expvalue #percentage points difference from benchmark
+  myrowsums<-rowSums(Ns) #total N for institution
+  
+  #make a little data frame to contain benchmarking results
+  allbench<-data.frame(cbind(myrowsums,phat,expvalue,diff))
+  colnames(allbench) <- c('N','observed','benchmark','diff')
+  return(allbench)
 }
 ```
 
@@ -115,37 +120,6 @@ toybench<-makebenchmark(smallworldoutcomes, smallworldN)
 #last term in function is multiplier for lambda in the DB version
 toybench %>% kable(booktabs = T, caption = "Small World Example, benchmarks") %>% 
   kable_styling()
-```
-
-### Additional example (not essential here)
-
-A worked example of how benchmarks are derived in TEF can be found in Annex B of [this document](https://www.officeforstudents.org.uk/media/c32f61aa-ceb7-4bbb-9f87-2cfc60f2bf89/tefyearfour_metricstechnicalalgorithmsandrebuildinstructions_revised20181219.pdf). This is set out differently from the Draper example, with data just on one provider and the whole sector, but the function above can be used with it by just treating this as data from two institutions, with institution 2's values obtained by subtracting Institution 1's data from the total. I did this just to confirm that the TEF method was the same as that used above.
-
-```{r AnnexB.eg, include=FALSE}
-# To use my function with this, I will just treat this as 2 unis
-# This confirms that the benchmark is same as given in the e.g.
-
-# There's also something odd - the z-scores for Uni1 and Uni2 given by the DG formula are identical but opposite in sign - that seems odd given that Uni2 is 20 x as big as Uni1.
-
-#Is there a clue here to what's wrong with the formula?
-
-tefoutcomes <-data.frame(matrix(c(.95,0,.92,.94,0,.98,
-                                  .95,.99,.95,.94,.98,.98),ncol=6,byrow=TRUE))
-tefN <-data.frame(matrix(c(500,0,150,400,0,40,
-                            19500,80000,94850,4600,6500,3960),ncol=6,byrow=TRUE))
-
-
-instnames<-c('Uni1','Uni2')
-
-
-colnames(tefoutcomes) <-c('Young.Agri','Young.Hist','Young.Maths',
-                          'Mature.Agri','Mature.Hist','Mature.Maths')
-colnames(tefN)<-colnames(tefoutcomes)
-rownames(tefoutcomes) <- instnames
-rownames(tefN) <- instnames
-tefz<-makebenchmark(tefoutcomes, tefN)
-#
-
 ```
 
 One small aside. Although the benchmarking formula is algebraically correct, the logic of benchmarking raises many questions. These are not my current focus, but are covered in previous critiques. One point concerns the criteria for a benchmark. It is noted that the benchmark should be associated with the outcome metric. However, if a benchmark is not equally distributed across institutions, this can create problems. I would argue that a benchmark should be associated with outcomes *within institutions* for it to be regarded as valid. Obviously this may be hard to demonstrate for small institutions, but where there is enough data, then it should be tested. Consider the situation for subject of study: if one set of institutions, A, offers medicine but not accountancy, and another set, B, offers accountancy but not medicine, then higher ratings for medicine than accountancy could just be a consequence of differences between institutions. We would need to find institutions that offer both subjects and show that medicine outperforms accountancy within institution to be confident there is a true subject-related difference to be adjusted for. 
@@ -172,67 +146,52 @@ The *makeSE* function below computes the benchmarks, difference and standard err
 # How to get SE for the difference?  See p 20 of Draper 2006
 
 #'If the grid is not too sparse and the ^pkj are not too close to 0 or 1, simple local variance estimation should work well'
-makeSE<- function(outcomes,Ns,mymult){
+makeSE<- function(outcomes,Ns){
   
   allbench<-makebenchmark(outcomes,Ns) #start by computing benchmarks using previous function
   localvar <- outcomes*(1-outcomes)/Ns
-
-# account of next step is confusing because we now have 3 subscripts, i, j and k
-# j and k are what were previously i and j (institution and benchmark)
-# i is just a value from 1 to k that determines value of lambda
-# By specifying lambda, can create expression to compute Differences, that also allows deriviation of variance of D
-# All a bit mindboggling, but this script replicates the Draper e.g.
-vDG<-rep(0,nrow(Ns)) #initialise variance estimate for difference score with DG formula
-vDGsd<-vabslam<-vnolambda<-vDB<-vDG #make vector for variance estimate with DB modified formula, or no lambda
-
-d<-rep(0,nrow(Ns)) #vector for differences: to check that lambda term recreates the differences
-myrowsums<-rowSums(Ns)
-mycolsums<-colSums(Ns)
-for (k in 1:nrow(Ns)){
-  for (i in 1:nrow(Ns)){
-    for (j in 1:ncol(Ns)){
-      lambda<- ifelse(i!=k,(-Ns[i,j]*Ns[k,j])/
-                        (myrowsums[i]*mycolsums[j]),
-      (Ns[i,j]/myrowsums[i])*(1-(Ns[i,j]/mycolsums[j])) )
-       
-      addbit <-lambda*outcomes[k,j] #this will be used to recreate the difference scores (formula 5)
-      addbit1 <-lambda^2*localvar[k,j] #this is the original Draper formula
-      
-      #Additional methods evaluated for exploring results when different versions of lambda used when computing formula 7
-      addbit2<-outcomes[k,j] #no lambda
-      addbit3<-mymult*sqrt(abs(lambda))*localvar[k,j] #DB; uses mymult*sqrt rather than squared lambda
-      addbit4 <-abs(lambda)*localvar[k,j] #Unsquared lambda
-        addbit5 <-addbit1*sqrt(Ns[k,j]) #SD rather than SE
-        if(is.na(addbit1)==FALSE){
-        d[i] <- d[i]+addbit #this should recreate the previously computed difference values in diff
+  
+  # account of next step is confusing because we now have 3 subscripts, i, j and k
+  # j and k are what were previously i and j (institution and benchmark)
+  # i is just a value from 1 to k that determines value of lambda
+  # By specifying lambda, can create expression to compute Differences, that also allows deriviation of variance of D
+  # All a bit mindboggling, but this script replicates the Draper e.g.
+  vDG<-rep(0,nrow(Ns)) #initialise variance estimate for difference score with DG formula
+  vDGsd<-vabslam<-vnolambda<-vDB<-vDG #make vector for variance estimate with DB modified formula, or no lambda
+  
+  d<-rep(0,nrow(Ns)) #vector for differences: to check that lambda term recreates the differences
+  myrowsums<-rowSums(Ns)
+  mycolsums<-colSums(Ns)
+  for (k in 1:nrow(Ns)){
+    for (i in 1:nrow(Ns)){
+      for (j in 1:ncol(Ns)){
+        lambda<- ifelse(i!=k,(-Ns[i,j]*Ns[k,j])/
+                          (myrowsums[i]*mycolsums[j]),
+                        (Ns[i,j]/myrowsums[i])*(1-(Ns[i,j]/mycolsums[j])) )
         
-        #the following lines compare different methods for estimating variance of difference scores
-        vDG[i]<-vDG[i]+addbit1 #original Draper Gittoes method 
-        vDGsd[i]<-vDGsd[i]+addbit5
-        vnolambda[i] <- vnolambda[i]+addbit2 #exclude lambda
-        vDB[i] <- vDB[i]+addbit3 #use squareroot rather than squared lambda
-        vabslam[i]<-vabslam[i]+addbit4 #use absolute value of lambda
+        addbit <-lambda*outcomes[k,j] #this will be used to recreate the difference scores (formula 5)
+        addbit1 <-lambda^2*localvar[k,j] #this is the original Draper formula
+        
+       if(is.na(addbit1)==FALSE){
+          d[i] <- d[i]+addbit #this should recreate the previously computed difference values in diff
+          
+          #the following lines compare different methods for estimating variance of difference scores
+          vDG[i]<-vDG[i]+addbit1 #original Draper Gittoes method 
+         }
       }
     }
   }
-}
-#zscore obtained by dividing difference scores by the SE, which is squareroot of variance
-zDG<-d/sqrt(vDG) #zscores computed using DraperGittoes method for SE
-zDGsd<-d/sqrt(vDGsd)
-znolambda<-d/sqrt(vnolambda)
-zDB<-d/sqrt(vDB)
-zabslam<-d/sqrt(vabslam)
-zDGsd1<-d/(sqrt(myrowsums)* sqrt(vDG))
-allz<-data.frame(cbind(allbench,zDG,zDB,zDGsd1))
-colnames(allz) <- c('N','observed','benchmark','diff','z.DG','z.DB','z.DGsd1')
-return(allz)
+  #zscore obtained by dividing difference scores by the SE, which is squareroot of variance
+  zDG<-d/sqrt(vDG) #zscores computed using DraperGittoes method for SE
+    allz<-data.frame(cbind(allbench,zDG))
+  colnames(allz) <- c('N','observed','benchmark','diff','z.DG')
+  return(allz)
 }
 ```
 
 ```{r smallworldSE, echo=FALSE}
 # apply makeSE to Draper's toy data
-mymult<-.5 #multiplier for lambda term in DB version: ignore this for now
-toyz<-makeSE(smallworldoutcomes, smallworldN,mymult)
+toyz<-makeSE(smallworldoutcomes, smallworldN)
 #last term in function is multiplier for lambda in the DB version
 toyz[,1:5] %>% kable(booktabs = T, caption = "Small World Example, z-scores") %>% 
   kable_styling()
@@ -241,7 +200,40 @@ toyz[,1:5] %>% kable(booktabs = T, caption = "Small World Example, z-scores") %>
 
 As noted by Draper (2006) the absolute z-scores given by this method seem remarkably large: In this toy example, we see z-scores with absolute values of 5, 9 and 20. 
 
-Yet, they are used in TEF as if they are regular z-scores, i.e.:
+### Additional example (not essential here)
+
+A worked example of how benchmarks are derived in TEF can be found in Annex B of [this document](https://www.officeforstudents.org.uk/media/c32f61aa-ceb7-4bbb-9f87-2cfc60f2bf89/tefyearfour_metricstechnicalalgorithmsandrebuildinstructions_revised20181219.pdf). This is set out differently from the Draper example, with data just on one provider and the whole sector, but the function above can be used with it by just treating this as data from two institutions, with institution 2's values obtained by subtracting Institution 1's data from the total. I did this just to confirm that the TEF method was the same as that used above.
+
+```{r AnnexB.eg, include=TRUE}
+# To use my function with this, I will just treat this as 2 unis
+# This confirms that the benchmark is same as given in the e.g.
+######################################################################################
+# Note the z-scores for Uni1 and Uni2 given by the DG formula 
+# are identical but opposite in sign - that seems odd given that Uni2 is 20 x as big as Uni1.
+# But perhaps this has to be the case with just 2 unis - i.e. z-scores must sum to zero?
+
+######################################################################################
+
+tefoutcomes <-data.frame(matrix(c(.95,0,.92,.94,0,.98,
+                                  .95,.99,.95,.94,.98,.98),ncol=6,byrow=TRUE))
+tefN <-data.frame(matrix(c(500,0,150,400,0,40,
+                           19500,80000,94850,4600,6500,3960),ncol=6,byrow=TRUE))
+
+
+instnames<-c('Uni1','Uni2')
+
+
+colnames(tefoutcomes) <-c('Young.Agri','Young.Hist','Young.Maths',
+                          'Mature.Agri','Mature.Hist','Mature.Maths')
+colnames(tefN)<-colnames(tefoutcomes)
+rownames(tefoutcomes) <- instnames
+rownames(tefN) <- instnames
+tefz<-makeSE(tefoutcomes, tefN)
+tefz[,1:5] %>% kable(booktabs = T, caption = "Small World Example, z-scores") %>% 
+  kable_styling()
+```
+
+Despite the massive range, DG z-scores are used in TEF as if they are regular z-scores, i.e.:
 
 From p.42  [Technical Specifications](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/658490/Teaching_Excellence_and_Student_Outcomes_Framework_Specification.pdf)
 
@@ -251,63 +243,58 @@ The HESA documents note that it is very easy with this method to get huge absolu
 
 ## Z-scores from simulated data
 
-I wanted to check whether these strikingly high z-scores were correctly computed. One way to do that is to simulate some data where there are no true quality differences between institutions - in other words, one can just simulate a set of random numbers - both for the metrics and for sample sizes. If the z-scores from the Draper-Gittoes formula are correct, then z-scores obtained with this approach should range from around -3 to +3.  But they don't, as the histogram below shows. 
+I wanted to check whether these strikingly high z-scores were correctly computed. One way to do that is to simulate some data where there are no true quality differences between institutions - in other words, one can just simulate a set of random numbers - both for the metrics and for sample sizes. If the z-scores from the Draper-Gittoes formula are correct, then z-scores obtained with this approach should range from around -3 to +3.  
 
-These data were simulated using the *rnorm* function in R, with mean value for the indicator of .6 and SD of .2. I have tried varying these values, and have also modified the simulation to make the sample sizes more realistic (as in reality they are strongly skewed, with a few enormous institutions). Overall, regardless of the setting of the simulation, you see z-scores that are considerably larger, in both positive and negative directions, than you would expect if the SEs were correct.
+In my original attempts at simulation, I used the *rnorm* function in R, with mean value for the indicator of .6 and SD of .2. The z-scores I got when running the *makeSE* function were very large - just like with real TEF data (see below) - ranging from around -50 to +50, depending on the precise mean/sd used to simulate scores.
 
-Furthermore, extreme z-scores are much more common in big than in small institutions, as shown below. This is also a feature of real TEF data, as I discussed in [this blogpost] (http://cdbu.org.uk/the-problem-with-tef-a-look-at-the-technical-failings) (see point 3).
+Tom Nichols, however, noted that because the data consist of binary pass/fail proportions for each indicator, then it is appropriate to simulate them with the *rbinom* function.
+If you do this assuming that there is no effect of university - i.e. all are simulated using the same function - you get a sensible range of z-scores (-3 to 3). 
+
+Furthermore, as shown below, this result holds if you allow for pass rates to vary with contextual factors.
 
 
 ```{r simforbench, echo=FALSE}
 #simulate many unis on 2 x 2 contextual factors
-# User can specify mean and SD for the benchmark
-# (Stdev implied from N & mymean)
-  mymat<-as.data.frame(matrix(NA,nrow=nuni,ncol=ncontext))
-      rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
-    #if you have already run this, data are saved as RDS and can just be reloaded (see below) if you set rerun to zero
-    mymult<-.5 #multiplier for the lambda term in DB version - to be explained later
-    nuni<-100
-    ncontext<-4 #N contextual factors combinations (as in 'small world' simulation)
-    
-    myNmat <-data.frame(matrix(pmax(50,rnorm(nuni*ncontext,500,200)),nrow=nuni)) # just set N as random for each cell
-    myNmat <- round(myNmat)
-for (u in 1:nuni){
-   mymean<-.5+runif(1)/2
-    mymat[u,] <- rbinom(ncontext,rowSums(myNmat)[u],mymean)/rowSums(myNmat)[u]
+
+rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
+#if you have already run this, data are saved as RDS and can just be reloaded (see below) if you set rerun to zero
+nuni<-100 #set to 1000 to get a sufficient number - but this takes time
+ncontext<-4 #N contextual factors combinations (as in 'small world' simulation)
+mymat<-as.data.frame(matrix(NA,nrow=nuni,ncol=ncontext)) #initialise data frame to hold p.hat values
+myNmat <-data.frame(matrix(pmax(50,rnorm(nuni*ncontext,500,200)),nrow=nuni)) # just set N as random for each cell; pmax sets a limit on possible values
+myNmat <- round(myNmat)
+
+low.p<-.5
+hi.p <-.9
+mybinom<-runif(ncontext,low.p,hi.p) #vector with effect of context; varies randomly between low.p and hi.p 
+for (c in 1:ncontext){
+  for (u in 1:nuni){
+    mymat[u,c] <- rbinom(1,myNmat[u,c],mybinom[c])/myNmat[u,c]
+  }
 }
-    fileRDS<-paste0('simulated data/simulated_z_Nuni',nuni,'_ncontext',ncontext,'_mean',mymean,'_sd',mysd,'_mult',mymult,'_logN')  ##filename for saving simz to RDS
+fileRDS<-paste0('simulated data/simulated_z_Nuni',nuni,'_ncontext',ncontext,'_lo_p',low.p,'hi_p',hi.p)  ##filename for saving simz to RDS
 
-    if(rerun==0){
-        simz<-readRDS(fileRDS)  #if this file exists, just read it in
-        }
-    if (rerun==1){
-        simz<-makeSE(mymat,myNmat,mymult) #this line recreates the simulated results - slow to run
-    }
-    
-    saveRDS(simz, fileRDS) #save the data to RDS format - can just load in on rerun
-    
-    #Plot the z-scores
-    hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score',col='red')
-    w<-which(abs(simz[,5])>3) #zscore > 2
-    mytext<-paste0('% with absolute z-score > 3 = ',100*length(w)/nuni,'%')
-    text(80,100,mytext,cex=.8)
+if(rerun==0){
+  simz<-readRDS(fileRDS)  #if this file exists, just read it in
+}
+if (rerun==1){
+  simz<-makeSE(mymat,myNmat) #this line recreates the simulated results - slow to run
+}
 
-    #Second plot shows how z-scores relate to sample size, using logN
-    plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
+#saveRDS(simz, fileRDS) #save the data to RDS format - can just load in on rerun
+
+#Plot the z-scores
+hist(simz[,5],breaks=40,main='Draper-Gittoes z-scores from random data',xlab='z-score',col='red')
+w<-which(abs(simz[,5])>3) #zscore > 2
+mytext<-paste0('% with absolute z-score > 3 = ',100*length(w)/nuni,'%')
+text(80,100,mytext,cex=.8)
+
+#Second plot shows how z-scores relate to sample size, using logN
+plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
 
 
 
 ```
-
-These plots indicate there is something wrong with the z-score estimates. In particular, it looks like the estimate of the standard error is too small.
-
-This result is at odds with this statement from the Technical Specificiations document (5.63):
-
-*As a test of the likelihood that a difference between a provider’s benchmark and its indicator is due to chance alone, a z-score +/- 3.0 means the likelihood of the difference being due to chance alone has reduced substantially and is negligible.*
-
-Given that applying the Draper-Gittoes formula to completely random data gives absolute z-scores greater than 3 on 76% of occasions, this conclusion can be questioned.
-
-A great deal hinges on the computation of lambda, which, as is evident from Figure 1, is not simple. I did, of course, wonder whether the *makeSE* function was correct.  
 
 There are two reasons to have confidence that the computations in *makeSE* are doing the benchmarking in the same way as is done in TEF. 
 
@@ -315,7 +302,7 @@ First, as specified in Formula (5) in Figure 1, when correctly computed, lambda 
 
 Second, the high numbers of extreme z-scores obtained with the *makeSE* function are not dissimilar to those obtained with real data. To demonstrate that point, we now go on to load in data from TEF year 2. We use [this dataset](https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv) (from 2017), as it has the awards (Bronze, Silver, Gold) as well as the raw data. The computed z-scores are provided in the raw data file, and are plotted for Core data for each metric below. It is evident that absolute z-scores greater than 3 are common - with the exact number varying from metric to metric, but ranging from 33% to 58%.
 
-```{r read2017,echo=FALSE, warnings=FALSE,message=FALSE}
+```{r read2017,echo=FALSE, warning=FALSE,message=FALSE}
 
 tef2url<-'https://www.officeforstudents.org.uk/media/2ebea92b-caa6-429c-902b-fbd390c6d046/tef_y2_allmetrics.csv'
 # Create data directory if not already present
@@ -349,7 +336,7 @@ w<-which(tef2017file$flag==9)
 tef2017file$flag[w]<-NA
 ```
 
-```{r checkz,echo=FALSE}
+```{r checkz,echo=FALSE,warning=FALSE}
 #To look at z-scores we'll work with a reduced file, so we just select Full Time, Core data
 #This file has one z-score per provider for each of 6 metrics
 
@@ -357,60 +344,36 @@ mycore2017<-filter(tef2017file,provider_majoritymode=='FullTime',modeofstudy=='F
 metriclist<-unique(mycore2017$metric)
 for (i in 1:length(metriclist)){
   temp<-filter(mycore2017,metric==metriclist[i])
- w<-which(abs(temp$zscore)>3)
-bigz<-100*length(w)/nrow(temp)
-mytext<-paste0('% with absolute z-score > 3 = \n',round(bigz,1),'%')
-
-hist(temp$zscore, breaks=40,main=metriclist[i],xlab='zscore',col='red')
-textxplace <-min(temp$zscore,na.rm=TRUE)+5
-text(textxplace,15,mytext,cex=.8)
+  w<-which(abs(temp$zscore)>3)
+  bigz<-100*length(w)/nrow(temp)
+  mytext<-paste0('% with absolute z-score > 3 = \n',round(bigz,1),'%')
+  
+  hist(temp$zscore, breaks=40,main=metriclist[i],xlab='zscore',col='red')
+  textxplace <-min(temp$zscore,na.rm=TRUE)+5
+  text(textxplace,15,mytext,cex=.8)
 }
 ```
 
 It does seem remarkable that HESA has continued to use this benchmarking method despite the fact it yields such extreme z-scores. The method seems designed to over-identify high and low-achieving institutions. The only step taken to counteract this trend is an ad hoc one: because large institutions are particularly prone to obtain extreme scores, a large absolute z-score is only flagged as 'significant' if the absolute difference score is also greater than 2 or 3 percentage points. Nevertheless, the number of flagged institutions for each metric, is still far higher than we would expect if the z-scores were accurate.
 
-## Exploring alternative formulae for SE calculation
-
-I wondered if there might be an error in the formula used to compute the z-scores. My attempt to investigate this was decidedly exploratory: I noted that formula 7 in Figure 1 involved using a squared value of lambda in a weighted sum. Given that lambda values were usually much smaller than 1, the squared values were minute. I experimented with taking the square root of lambda as a multiplier instead. This gives a distribution of z-scores that looks far more like one would expect. With simulated random data, the range of z-scores depends on the standard deviation specified when simulating the data, but is generally no greater than +/- 4. The plot below shows the z-scores obtained with the same random dataset shown above with the Draper-Gittoes method. Note that as well as giving a more plausible range of z-scores, this method does not show the strikingly greater dispersion of z-scores with sample size that is obtained when the Draper-Gittoes method is used. 
-
-```{r sqrtsim, echo=FALSE}
-#Plot the z-scores
-hist(simz[,6],breaks=40,main='Sqrt.lambda method: z-scores from random data',xlab='z-score')
-w1<-which(abs(simz[,6])>3) #rate for alternative DB index based on sqrt lambda
-mytext<-paste0('% with absolute z-score > 3 = ',100*length(w1)/nuni,'%')
-text(-2.5,60,mytext,cex=.8)
-plot(log(simz[,1]),simz[,6],ylab='z-score',xlab='logN',main='Sqrt.lambda method with random data, z-score by log N')
-
-```
-
-The relationship between zscores obtained using lambda squared vs squareroot lambda is shown in the next Figure. This uses the simulated random data described above. One can see that, by flagging institutions with Draper-Gittoes absolute z-scores greater than 2, a very large proportion of institutions would be identified as 'significant', when in fact the alternative method of computing z-scores suggests their difference scores are well within normal limits.
-
-It is important to bear in mind that when working with simulated data, the precise details will depend on factors such as the variance and distribution of scores. I have not explored these aspects in detail. My purpose here is just to note that the distribution of z-scores from the Draper-Gittoes method is very strange, and it is plausible that there could be an algebraic error involved in the use of lambda squared, which leads to very small standard errors. I'm not clear whether the use of a square root lambda weighting makes sense statistically: I just tried this as an empirical alternative, and was interested to see that it seemed to behave in a more orderly manner. Nevertheless, I have found that where the SD of the simulated metric is small, use of square root lambda gives too restricted a range of z-scores, with no extreme values at all. I cannot therefore recommend this as an alternative: I can only note that the current Draper-Gittoes method is problematic.
-
-```{r plotDGvsDB, echo=FALSE}
-
-plot(simz[,5],simz[,6],xlab='Draper-Gittoes (lambda squared)',ylab='sqrt lambda method',main='Z-scores obtained from same data using two methods',pch='+')
-abline(v=-2,lty=2)
-abline(v=2,lty=2)
-```
 
 ## Conversion of z-scores into flags
 
 In TEF benchmarking, z-scores are converted into 'flags', ranging from - - or -, to denote performance below expectation, up to + or ++ for performance above expectation, with = used to indicate performance in line with expectation. It is these flags that the TEF panel considers when deciding which award (Gold, Silver or Bronze) to award. 
 
 Draper-Gittoes z-scores are flagged for significance as follows:  
-a) - - z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.  
- 
-b) - z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.  
- 
-c) + z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.  
- 
-d) ++ z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.  
+
++ double minus: z-score of -3 or less, AND an absolute difference between observed and expected values of 3%.  
++ single minus: z-score of -2 or less, AND an absolute difference between observed and expected values of 2%.  
+
++ single plus: z-score of 2 or more, AND an absolute difference between observed and expected values of 2%.  
+
++ double plus: z-score of 3 or more, AND an absolute difference between observed and expected values of 3%.  
 
 Given the problems with the method outlined above, this method is likely to massively overdiagnose both problems and good performance.
- 
+
 ## Using quantiles rather than z-scores
- 
+
 Given that the z-scores obtained with the Draper-Gittoes method are so extreme, it could be argued that flags should be based on quantiles rather than z-score cutoffs, omitting the additional absolute difference criterion. For instance, for the Year 2 TEF data plotted above, we can find cutoffs corresponding to the most extreme 5% or 1%.
 
 ```{r makequants, echo=FALSE}
@@ -465,38 +428,38 @@ Clearly this makes a huge difference to outcomes. Because extreme scores are far
 
 ```{r checkaward, echo=FALSE}
 for (thisaward in c('Bronze','Gold')){
-myaward <- filter(mycore2017,provider_tefaward==thisaward)
-metriclist<-unique(myaward$metric)
-myaward$provider_name<-strtrim(myaward$provider_name,25)
-unilist<-unique(myaward$provider_name)
-naward<-length(unilist)
-nmetric<-length(metriclist)
-#want to reshape this to display z-scores for each metric for these institutions
-aggdata1 <-aggregate(myaward$zscore, by=list(myaward$provider_name,myaward$metric),
-  FUN=mean, na.rm=TRUE)
-aggdata2 <-aggregate(myaward$flag, by=list(myaward$provider_name,myaward$metric),
-  FUN=mean, na.rm=TRUE)
-aggdata3 <-aggregate(myaward$newflag, by=list(myaward$provider_name,myaward$metric),
-  FUN=mean, na.rm=TRUE)
-metrictable<-data.frame(matrix(NA,nrow=naward,ncol=(nmetric*3+1)))
-colnames(metrictable)<-c('Provider','Teachingz','Assessmentz','Supportz','NonContz','Employmentz','HighSkilledz',
-                'Teaching.flag','Assessment.flag','Support.flag','NonCont.flag','Employment.flag','HighSkilled.flag', 
-               'Teaching.newflag','Assessment.newflag','Support.newflag','NonCont.newflag','Employment.newflag','HighSkilled.newflag'  )
-blocklength<-nrow(aggdata1)/nmetric
-metrictable$Provider <-aggdata1$Group.1[1:blocklength]
-for (i in 1:nmetric){
-  startblock<-1+(i-1)*blocklength
-  endblock<-blocklength*i
-  metrictable[,(i+1)]<-aggdata1[startblock:endblock,3]
-  metrictable[,(nmetric+i+1)]<-aggdata2[startblock:endblock,3]
-  metrictable[,(2*nmetric+i+1)]<-aggdata3[startblock:endblock,3]
-}
-metrictable[,8:19]<-metrictable[8:19]-3 #convert from 1:5 to -2 to +2
-metrictable$oldflagscore <-.5*rowSums(metrictable[,8:10],na.rm=TRUE)+rowSums(metrictable[,11:13],na.rm=TRUE)
-metrictable$newflagscore <-.5*rowSums(metrictable[,14:16],na.rm=TRUE)+rowSums(metrictable[,17:19],na.rm=TRUE)
-if(thisaward=='Bronze'){
-  bronzetable<-metrictable
-}
+  myaward <- filter(mycore2017,provider_tefaward==thisaward)
+  metriclist<-unique(myaward$metric)
+  myaward$provider_name<-strtrim(myaward$provider_name,25)
+  unilist<-unique(myaward$provider_name)
+  naward<-length(unilist)
+  nmetric<-length(metriclist)
+  #want to reshape this to display z-scores for each metric for these institutions
+  aggdata1 <-aggregate(myaward$zscore, by=list(myaward$provider_name,myaward$metric),
+                       FUN=mean, na.rm=TRUE)
+  aggdata2 <-aggregate(myaward$flag, by=list(myaward$provider_name,myaward$metric),
+                       FUN=mean, na.rm=TRUE)
+  aggdata3 <-aggregate(myaward$newflag, by=list(myaward$provider_name,myaward$metric),
+                       FUN=mean, na.rm=TRUE)
+  metrictable<-data.frame(matrix(NA,nrow=naward,ncol=(nmetric*3+1)))
+  colnames(metrictable)<-c('Provider','Teachingz','Assessmentz','Supportz','NonContz','Employmentz','HighSkilledz',
+                           'Teaching.flag','Assessment.flag','Support.flag','NonCont.flag','Employment.flag','HighSkilled.flag', 
+                           'Teaching.newflag','Assessment.newflag','Support.newflag','NonCont.newflag','Employment.newflag','HighSkilled.newflag'  )
+  blocklength<-nrow(aggdata1)/nmetric
+  metrictable$Provider <-aggdata1$Group.1[1:blocklength]
+  for (i in 1:nmetric){
+    startblock<-1+(i-1)*blocklength
+    endblock<-blocklength*i
+    metrictable[,(i+1)]<-aggdata1[startblock:endblock,3]
+    metrictable[,(nmetric+i+1)]<-aggdata2[startblock:endblock,3]
+    metrictable[,(2*nmetric+i+1)]<-aggdata3[startblock:endblock,3]
+  }
+  metrictable[,8:19]<-metrictable[8:19]-3 #convert from 1:5 to -2 to +2
+  metrictable$oldflagscore <-.5*rowSums(metrictable[,8:10],na.rm=TRUE)+rowSums(metrictable[,11:13],na.rm=TRUE)
+  metrictable$newflagscore <-.5*rowSums(metrictable[,14:16],na.rm=TRUE)+rowSums(metrictable[,17:19],na.rm=TRUE)
+  if(thisaward=='Bronze'){
+    bronzetable<-metrictable
+  }
 }
 print('Bronze awards, 2017')
 print(bronzetable[order(bronzetable$oldflagscore),c(1,20,21)])
