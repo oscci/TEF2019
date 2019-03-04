@@ -58,6 +58,9 @@ colnames(smallworldN)<-c('YoungM','YoungF','MatureM','MatureF')
 rownames(smallworldoutcomes) <- toynames
 rownames(smallworldN) <- toynames
 
+tombit<-0 #change tombit to one to incorporate rounding error correction by
+#Tom Nichols, below. This, however, makes computed z's disagree with Draper e.g.!
+if (tombit==1){
 # Adjust proportions to account for rounding error
 smallworldCounts = round(smallworldN*smallworldoutcomes)
 smallworldoutcomes = smallworldCounts/max(smallworldN,1)
@@ -65,7 +68,7 @@ smallworldoutcomes = smallworldCounts/max(smallworldN,1)
 smallworldCounts = smallworldCounts+2
 smallworldN = smallworldN+4
 smallworldoutcomes = smallworldCounts/smallworldN
-
+}
 smallworldoutcomes  %>% kable(booktabs = T, caption = "Small World Example from Draper (2006), % Students completing") %>% 
   kable_styling()
 smallworldN %>% kable(booktabs = T, caption = "Small World Example, N") %>% 
@@ -259,8 +262,8 @@ Furthermore, extreme z-scores are much more common in big than in small institut
 #simulate many unis on 2 x 2 contextual factors
 # User can specify mean and SD for the benchmark
 # (Stdev implied from N & mymean)
-for(mymean in c(.6)){ # mean benchmark level; probability that a student passes 
-    rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
+  mymat<-as.data.frame(matrix(NA,nrow=nuni,ncol=ncontext))
+      rerun<-1 #set to 1 to simulate data (simulation takes a few minutes)
     #if you have already run this, data are saved as RDS and can just be reloaded (see below) if you set rerun to zero
     mymult<-.5 #multiplier for the lambda term in DB version - to be explained later
     nuni<-100
@@ -268,9 +271,10 @@ for(mymean in c(.6)){ # mean benchmark level; probability that a student passes
     
     myNmat <-data.frame(matrix(pmax(50,rnorm(nuni*ncontext,500,200)),nrow=nuni)) # just set N as random for each cell
     myNmat <- round(myNmat)
-
-    mymat <- data.frame(matrix(rbinom(nuni*ncontext,unlist(myNmat),mymean),nrow=nuni))/myNmat
-    
+for (u in 1:nuni){
+   mymean<-.5+runif(1)/2
+    mymat[u,] <- rbinom(ncontext,rowSums(myNmat)[u],mymean)/rowSums(myNmat)[u]
+}
     fileRDS<-paste0('simulated data/simulated_z_Nuni',nuni,'_ncontext',ncontext,'_mean',mymean,'_sd',mysd,'_mult',mymult,'_logN')  ##filename for saving simz to RDS
 
     if(rerun==0){
@@ -291,7 +295,7 @@ for(mymean in c(.6)){ # mean benchmark level; probability that a student passes
     #Second plot shows how z-scores relate to sample size, using logN
     plot(log(simz[,1]),simz[,5],ylab='Draper-Gittoes z-score',xlab='logN',main='Draper-Gittoes method with random data, z-score by log N')
 
-}
+
 
 ```
 
