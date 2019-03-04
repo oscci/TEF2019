@@ -1,0 +1,99 @@
+---
+title: "Playing With Binomial Mixed Models"
+author: "T Nichols"
+date: "04/03/2019"
+output: html_document
+---
+
+```{r presetup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Simplistic Demo of Modelling Count Data with Mixed Models
+
+```{r setup, include=FALSE}
+require(lme4)
+```
+
+This parameters reflect Dorothy's toy set up...
+```{r Parameters }
+Nuni=100
+Nctx=4
+Uni=rep(1:Nuni,each=Nctx)
+# Variation in total N's... no fewer than 25, but up to 1025
+Nstud=25+round(1000*runif(Nuni*Nctx))
+Context=rep(1:Nctx,Nuni)
+# Will need these for later modelling
+Context.f=factor(Context)
+Uni.f=factor(Uni)
+```
+
+Now lets create some fake truth... a strong context effect and uni effect
+```{r GroundTruth }
+Logit=function(p)log(p/(1-p))
+InvLogit=function(x)exp(x)/(1+exp(x))
+Succ=InvLogit(rep(Logit(seq(0.3,0.7,len=4)),Nuni)+rep(Logit(seq(0.2,0.8,len=Nuni)),each=Nctx))
+# Adjust 0.3,0.7 to change context effect, 0.2,0.8 to change Uni effect; 
+# The more similar the less the effect (e.g. 0.5,0.5 would be no effect)
+
+plot(Uni,Succ,col=1:4,ylim=c(0,1),
+      main="True success probabilities",
+      xlab="University",ylab="Probability");
+legend(x='topleft',legend=c("Ctx 1","Ctx 2","Ctx 3","Ctx 4"),pch=1,col=1:4)
+# One realisation of data...
+Y=rbinom(n=Nuni*Nctx,size = Nstud,prob = Succ)
+```
+Take note of the Context parameters estimates in the Logit of the 'true' effects... leater we'll compare them to the estimates.
+```{r CtxComparison}
+Logit(seq(0.3,0.7,len=4))
+```
+
+Let's see what happens when we fit the wrong model
+
+## Fixed Effects Model
+```{r FitGLM}
+mod = glm(cbind(Y,Nstud-Y) ~ -1 + Context.f, family="binomial")
+print(mod)
+```
+These context effects are similar but not so close to the true Logit scale values.  (Note I've used the -1 to let `Context.f` estimate the mean and give 4 interpretable values, instead of an intercept and 3 relative `Context.f` estimates.)
+
+Now let's see about residuals
+```{r GLM.ResidualAnalysis}
+Res=residuals(mod,type="pearson",scaled=TRUE)
+plot(Uni,Res,col=1:4,
+      main="Residuals - Fixed Effects",
+      xlab="University",ylab="Standardised Residual");
+legend(x='topleft',legend=c("Ctx 1","Ctx 2","Ctx 3","Ctx 4"),pch=1,col=1:4)
+qqnorm(Res,col=1:4);abline(0,1)
+```
+
+Pretty bad... let's see what happens when we model the random effect...
+
+## Mixed Model
+```{r FitGLMM}
+mmod  <- glmer(cbind(Y,Nstud-Y) ~ -1 + Context.f + (1 | Uni.f), family="binomial")
+print(mmod)
+```
+See how close these parameter estimates are to the true Logit scale Context effects?
+
+Now let's see about residuals
+```{r GLMM.ResidualAnalysis}
+mRes=residuals(mmod,type="pearson",scaled=TRUE)
+plot(Uni,mRes,col=1:4,
+      main="Residuals - Mixed Model",
+      xlab="University",ylab="Standardised Residual");
+legend(x='topleft',legend=c("Ctx 1","Ctx 2","Ctx 3","Ctx 4"),pch=1,col=1:4)
+qqnorm(mRes,col=1:4);abline(0,1)
+```
+
+So... this shows that a random university effect could possibly bring z-scores into line... but that variance is not gone, it's moved into the random effect, the random intercepts that model university-specific variation.  
+
+We can look at the university-specific residuals:
+```{r BLUPs}
+cV <- ranef(mmod, condVar = TRUE,drop=TRUE)
+ranvar <- attr(cV[[1]], "postVar")
+Z = cV$Uni.f/sqrt(attr(cV$Uni.f,"postVar"))
+qqnorm(Z);abline(0,1)
+```
+
+Now this has crazy-big residuals, up to +/-20, right?  But if you go up above and decrease the magnitude of the random effect, e.g. change the  0.2,0.8 to 0.48,0.52, i.e. practically no university random effect, you'll find these uni-specific residuals are almost exactly variance 1 and behave just like null z-scores.
