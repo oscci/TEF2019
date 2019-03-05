@@ -22,6 +22,7 @@ library(janitor)
 ## Benchmarking and the TEF
 Updated March 4th, with input from Tom Nichols and Paul Thompson.
 This is a work in progress - see Postscript at the end for a recent possible insight!
+Update March 5th: see added section 'An explanation for extreme z-scores: Conventional vs SE-based z-scores' which develops the idea in Postscript.
 
 N. B. This gives the background and computations relevant to this blogpost
 http://deevybee.blogspot.com/2019/03/benchmarking-in-tef-something-doesnt.html
@@ -358,7 +359,46 @@ for (i in 1:length(metriclist)){
 }
 ```
 
-It does seem remarkable that HESA has continued to use this benchmarking method despite the fact it yields such extreme z-scores. The method seems designed to over-identify high and low-achieving institutions. The only step taken to counteract this trend is an ad hoc one: because large institutions are particularly prone to obtain extreme scores, a large absolute z-score is only flagged as 'significant' if the absolute difference score is also greater than 2 or 3 percentage points. Nevertheless, the number of flagged institutions for each metric, is still far higher than we would expect if the z-scores were accurate.
+## An explanation for extreme z-scores: Conventional vs SE-based z-scores
+
+Insight into the reasons for the extreme zscores comes when one realises they are not conventional z-scores, which involve dividing an observed value by the SD of the sample. Rather they divide the observed value by the SE of the mean, which is an estimate of the precision of the estimate.
+
+Here's an analogy that helped me understand what is going on here.
+Suppose you want to compare my height, 169 cm, to that of all women in a big population.
+Let's suppose that we sample 10,000 women, and get a mean height of 170 cm with SD of 3 cm.
+Clearly, my height is well within normal limits.
+
+But if we want a measure of precision of the estimate of the mean for the population of women, we compute the Standard Error of the Mean (SEm), by dividing the standard deviation by the square root of N. This value is 3/100 = .03.
+
+We can then get 95% confidence limits around the mean by calculating the mean +/- 1.96 times the SE.  This gives a confidence interval of 169.94 - 170.059.
+My height is well outside that range.
+In effect, we can say that my height is reliably different from the population average, even though the difference is very small.
+
+I think that this is the problem with the TEF method: the z-scores are not conventional z-scores. They tell us whether the obtained score is in effect *identical* to the benchmarked value, but not whether it is statistically unusual.
+
+In fact, Gittoes and Draper refer to the statistic that they estimate in Equation as a SE, rather than a SD, and the HESA literature notes some confusion in the terminology. The Nichols simulation gives insight into this, because it gives a sensible range of z-scores when simulating data where every institution has the same true score. So these 'z-scores' reflect only error variance. 
+
+If we want to interpret the difference scores in a more conventional manner (as is done in TEF), then we should compute z-scores using the usual formula that has the sample SD as denominator. The SE values computed by the DG method can then be used to put a confidence interval around the z-score estimate.This next chunk of code does that - and shows how 'true' z-scores have a linear relationship with the SE-based z-scores computed in TEF.
+
+```{r true,echo=FALSE,warning=FALSE}
+#As before, but this time using conventional method for z-score, ie take SD of diffs and divide by that 
+
+
+for (i in 1:length(metriclist)){
+  temp<-filter(mycore2017,metric==metriclist[i],!(is.na(difference)))
+  thissd<-sd(temp$difference)
+  temp$truez<-temp$zscore/thissd
+  temp$truez.lo.ci<-(temp$zscore-1.96*temp$standarddeviation)/thissd
+ temp$truez.hi.ci<-(temp$zscore+1.96*temp$standarddeviation)/thissd
+
+  hist(temp$truez, breaks=40,main=metriclist[i],xlab='zscore',col='red')
+  plot(temp$zscore,temp$truez,xlab='Difference/SE',ylab='true z',main=metriclist[i])
+  text(-8,3,'Blue and red points denote \nlower and upper CIs for true zscore',cex=.7)
+  lines(temp$zscore,temp$truez.lo.ci,type='p',col='blue',cex=.5)
+   lines(temp$zscore,temp$truez.hi.ci,type='p',col='red',cex=.5)
+}
+```
+It does seem remarkable that HESA has continued to use their method for computing SE-based z-scores despite the fact it yields such extreme values. The method seems designed to over-identify high and low-achieving institutions. The only step taken to counteract this trend is an ad hoc one: because large institutions are particularly prone to obtain extreme scores, a large absolute z-score is only flagged as 'significant' if the absolute difference score is also greater than 2 or 3 percentage points. Nevertheless, the number of flagged institutions for each metric, is still far higher than we would expect if the z-scores were accurate.
 
 
 ## Conversion of z-scores into flags
