@@ -392,8 +392,8 @@ for (i in 1:length(metriclist)){
  temp$truez.hi.ci<-(temp$zscore+1.96*temp$standarddeviation)/thissd
 
   hist(temp$truez, breaks=40,main=metriclist[i],xlab='zscore',col='red')
-  plot(temp$zscore,temp$truez,xlab='Difference/SE',ylab='true z',main=metriclist[i])
-  text(-8,3,'Blue and red points denote \nlower and upper CIs for true zscore',cex=.7)
+  plot(temp$zscore,temp$truez,xlab='Difference/SE (TEF z-score)',ylab='Conventional z-score',main=metriclist[i])
+  #text(-8,3,'Blue and red points denote \nlower and upper CIs for true zscore',cex=.7)
   lines(temp$zscore,temp$truez.lo.ci,type='p',col='blue',cex=.5)
    lines(temp$zscore,temp$truez.hi.ci,type='p',col='red',cex=.5)
 }
