@@ -23,9 +23,7 @@ library(janitor)
 Updated March 4th, with input from Tom Nichols and Paul Thompson.
 This is a work in progress - see Postscript at the end for a recent possible insight!
 Update March 5th: see added section 'An explanation for extreme z-scores: Conventional vs SE-based z-scores' which develops the idea in Postscript.
-
-N. B. This gives the background and computations relevant to this blogpost
-http://deevybee.blogspot.com/2019/03/benchmarking-in-tef-something-doesnt.html
+Update March 6th: new version of blogpost now up: http://deevybee.blogspot.com/2019/03/benchmarking-in-tef-something-doesnt.html
 
 I'm a long-term critic of the Teaching Excellence and Student Outcomes Framework (TEF). I've put forward a swathe of arguments against the rationale for TEF in [this lecture](https://www.slideshare.net/deevybishop/southampton-lecture-on-tef), as well as blogging for the Council for Defence of British Universities (CDBU) about problems with its [rationale](http://cdbu.org.uk/tef-an-ill-conceived-solution-to-a-wrongly-posed-problem/) and [statistical methods](http://cdbu.org.uk/the-problem-with-tef-a-look-at-the-technical-failings/). 
 
@@ -387,15 +385,12 @@ If we want to interpret the difference scores in a more conventional manner (as 
 for (i in 1:length(metriclist)){
   temp<-filter(mycore2017,metric==metriclist[i],!(is.na(difference)))
   thissd<-sd(temp$difference)
-  temp$truez<-temp$zscore/thissd
-  temp$truez.lo.ci<-(temp$zscore-1.96*temp$standarddeviation)/thissd
- temp$truez.hi.ci<-(temp$zscore+1.96*temp$standarddeviation)/thissd
+  temp$truez<-temp$difference/thissd
+
 
   hist(temp$truez, breaks=40,main=metriclist[i],xlab='zscore',col='red')
   plot(temp$zscore,temp$truez,xlab='Difference/SE (TEF z-score)',ylab='Conventional z-score',main=metriclist[i])
-  #text(-8,3,'Blue and red points denote \nlower and upper CIs for true zscore',cex=.7)
-  lines(temp$zscore,temp$truez.lo.ci,type='p',col='blue',cex=.5)
-   lines(temp$zscore,temp$truez.hi.ci,type='p',col='red',cex=.5)
+
 }
 ```
 It does seem remarkable that HESA has continued to use their method for computing SE-based z-scores despite the fact it yields such extreme values. The method seems designed to over-identify high and low-achieving institutions. The only step taken to counteract this trend is an ad hoc one: because large institutions are particularly prone to obtain extreme scores, a large absolute z-score is only flagged as 'significant' if the absolute difference score is also greater than 2 or 3 percentage points. Nevertheless, the number of flagged institutions for each metric, is still far higher than we would expect if the z-scores were accurate.
